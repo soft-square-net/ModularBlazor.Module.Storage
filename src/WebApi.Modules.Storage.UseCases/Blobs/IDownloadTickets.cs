@@ -1,7 +1,7 @@
 namespace soft.square.net.WebApi.Modules.Storage.UseCases.Blobs;
 
-/// <summary>What a module-signed download link opens: one blob of one tenant, with the name and type to serve it as.</summary>
-public sealed record DownloadTicket(string TenantId, string BlobKey, string FileName, string ContentType, bool Inline);
+/// <summary>What a module-signed download link opens: one blob of one tenant (in the store at <see cref="Location"/>), with the name and type to serve it as.</summary>
+public sealed record DownloadTicket(string TenantId, string BlobKey, string FileName, string ContentType, bool Inline, string? Location = null);
 
 /// <summary>
 /// Module-signed download links for providers that cannot presign (the local disk): the ticket is signed into a token

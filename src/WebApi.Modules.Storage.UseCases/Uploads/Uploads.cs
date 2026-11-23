@@ -20,7 +20,7 @@ public sealed record UploadDto(Guid Id, Guid FolderId, string Name, long Size, i
 /// </summary>
 public sealed record StartUploadCommand(Guid FolderId, string Name, long Size, string? ContentType, NameConflict Conflict) : ICommand<Result<UploadDto>>;
 
-public sealed class StartUploadHandler(IStorageStore store, ItemAccess access, StorageCaller caller, IBlobStore blobs, ITenantContext tenant,
+public sealed class StartUploadHandler(IStorageStore store, ItemAccess access, StorageCaller caller, IBlobStores stores, ITenantContext tenant,
     IOptions<StorageOptions> options) : ICommandHandler<StartUploadCommand, Result<UploadDto>>
 {
     public async ValueTask<Result<UploadDto>> Handle(StartUploadCommand command, CancellationToken ct)
@@ -34,9 +34,21 @@ public sealed class StartUploadHandler(IStorageStore store, ItemAccess access, S
             return Result<UploadDto>.Conflict(StorageMessages.NameTaken(name));
 
         var settings = options.Value;
-        var key = Blob.NewKey(tenant.Required.Id, caller.Now);
-        var session = UploadSession.Start(folder.Value.Item.Id, name, command.ContentType, command.Size, settings.ChunkSize, settings.MaxFileSize,
-            command.Conflict, key, caller.UserId, caller.Now, settings.UploadLifetime);
+        var tenantId = tenant.Required.Id;
+        var placement = settings.PlacementOf(tenantId);
+        if (placement.Limit is { } quota)
+        {
+            // Files kept (every version, a blob shared by copies once) and uploads under way count.
+            var usage = await store.UsageAsync(ct);
+            if (usage.Used + usage.Pending + command.Size > quota) return Result<UploadDto>.Conflict(StorageMessages.QuotaExceeded(quota));
+        }
+
+        var location = BlobLocations.Of(placement);
+        var blobs = stores.Get(location);
+        var key = Blob.NewKey(tenantId, caller.Now);
+        var session = UploadSession.Start(folder.Value.Item.Id, name, command.ContentType, command.Size,
+            Math.Max(settings.ChunkSize, blobs.MinPartSize), settings.MaxFileSize, command.Conflict, key, location, caller.UserId, caller.Now,
+            settings.UploadLifetime);
         session.UseProviderUpload(await blobs.StartUploadAsync(key, session.ContentType, ct));
         store.Add(session);
         await store.SaveAsync(ct);
@@ -59,7 +71,7 @@ public sealed class GetUploadHandler(IStorageStore store, StorageCaller caller) 
 /// <summary>One chunk, at the offset the session expects.</summary>
 public sealed record WriteChunkCommand(Guid Id, long Offset, long Length, Stream Data) : ICommand<Result<UploadDto>>;
 
-public sealed class WriteChunkHandler(IStorageStore store, StorageCaller caller, IBlobStore blobs) : ICommandHandler<WriteChunkCommand, Result<UploadDto>>
+public sealed class WriteChunkHandler(IStorageStore store, StorageCaller caller, IBlobStores stores) : ICommandHandler<WriteChunkCommand, Result<UploadDto>>
 {
     public async ValueTask<Result<UploadDto>> Handle(WriteChunkCommand command, CancellationToken ct)
     {
@@ -70,7 +82,7 @@ public sealed class WriteChunkHandler(IStorageStore store, StorageCaller caller,
         try { part = session.CheckChunk(command.Offset, command.Length, caller.UserId, caller.Now); }
         catch (DomainException e) { return Result<UploadDto>.Conflict(e.Message); }
 
-        var receipt = await blobs.WritePartAsync(session.BlobKey, session.ProviderUploadId, part, command.Offset, command.Data, command.Length, ct);
+        var receipt = await stores.Get(session.Location ?? "").WritePartAsync(session.BlobKey, session.ProviderUploadId, part, command.Offset, command.Data, command.Length, ct);
         session.ChunkStored(command.Length, receipt);
         await store.SaveAsync(ct);
         return UploadDto.From(session);
@@ -83,7 +95,7 @@ public sealed class WriteChunkHandler(IStorageStore store, StorageCaller caller,
 /// </summary>
 public sealed record CompleteUploadCommand(Guid Id) : ICommand<Result<ItemDto>>;
 
-public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access, StorageCaller caller, IBlobStore blobs)
+public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access, StorageCaller caller, IBlobStores stores)
     : ICommandHandler<CompleteUploadCommand, Result<ItemDto>>
 {
     public async ValueTask<Result<ItemDto>> Handle(CompleteUploadCommand command, CancellationToken ct)
@@ -118,8 +130,8 @@ public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access
             store.Add(file);
         }
 
-        await blobs.CompleteUploadAsync(session.BlobKey, session.ProviderUploadId, session.PartReceipts, session.Size, ct);
-        store.Add(Blob.Create(session.BlobKey, session.Size, now));
+        await stores.Get(session.Location ?? "").CompleteUploadAsync(session.BlobKey, session.ProviderUploadId, session.PartReceipts, session.Size, ct);
+        store.Add(Blob.Create(session.BlobKey, session.Location ?? "", session.Size, now));
         store.Remove(session);
         await store.SaveAsync(ct);
         return ItemDto.From(file, await access.RightsOnChildAsync(folder.Value, file, ct));
@@ -129,13 +141,13 @@ public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access
 /// <summary>Cancels an upload and drops its bytes.</summary>
 public sealed record CancelUploadCommand(Guid Id) : ICommand<Result>;
 
-public sealed class CancelUploadHandler(IStorageStore store, StorageCaller caller, IBlobStore blobs) : ICommandHandler<CancelUploadCommand, Result>
+public sealed class CancelUploadHandler(IStorageStore store, StorageCaller caller, IBlobStores stores) : ICommandHandler<CancelUploadCommand, Result>
 {
     public async ValueTask<Result> Handle(CancelUploadCommand command, CancellationToken ct)
     {
         var found = await Sessions.MineAsync(store, caller, command.Id, ct);
         if (!found.IsSuccess) return Result.NotFound([.. found.Errors]);
-        await blobs.AbortUploadAsync(found.Value.BlobKey, found.Value.ProviderUploadId, ct);
+        await stores.Get(found.Value.Location ?? "").AbortUploadAsync(found.Value.BlobKey, found.Value.ProviderUploadId, ct);
         store.Remove(found.Value);
         await store.SaveAsync(ct);
         return Result.Success();

@@ -32,6 +32,10 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("Location")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<int>("References")
                         .IsConcurrencyToken()
                         .HasColumnType("int");
@@ -229,6 +233,10 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
 
                     b.Property<Guid>("FolderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("Name")
                         .IsRequired()

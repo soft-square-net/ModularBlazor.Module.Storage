@@ -32,6 +32,27 @@
         }
       }
     },
+    "/api/storage/usage": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "The tenant's storage use: bytes kept, bytes of uploads under way, and the quota (null: none).",
+        "operationId": "Storage_GetUsage",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUsage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/storage/folders/{id}/items": {
       "get": {
         "tags": [
@@ -1483,6 +1504,31 @@
           },
           "conflict": {
             "$ref": "#/components/schemas/NameConflict"
+          }
+        }
+      },
+      "StorageUsage": {
+        "required": [
+          "used",
+          "pending",
+          "quota"
+        ],
+        "type": "object",
+        "properties": {
+          "used": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quota": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
           }
         }
       },

@@ -7,7 +7,7 @@ namespace soft.square.net.WebApi.Modules.Storage.Web;
 
 /// <summary>
 /// Storage: the tenant's folders and files, Windows-style. The tenant database holds the tree (schema "storage"), the
-/// bytes are blobs in a provider (the local disk for now; S3 and MinIO in phase 2). Access is an NTFS-style access
+/// bytes are blobs in a store (the local disk, or S3 / MinIO through named connections). Access is an NTFS-style access
 /// control list on every folder and file, for users, everyone, holders of a platform permission and Storage groups;
 /// the platform permissions <c>storage.access</c> and <c>storage.admin</c> only open the door.
 /// This is the composition root: the runtime creates it, reads the manifest and calls <see cref="ConfigureServices"/>

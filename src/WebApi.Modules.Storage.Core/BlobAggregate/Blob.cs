@@ -9,13 +9,17 @@ public sealed class Blob : AggregateRoot<string>, ITenantOwned
 {
     private Blob() { } // EF Core
 
+    public const int LocationLength = 300;
+
     public string TenantId { get; set; } = "";
+    /// <summary>The store the bytes were written to (<c>connection|bucket|prefix</c>; null: the local disk).</summary>
+    public string? Location { get; private set; }
     public long Size { get; private set; }
     public int References { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public static Blob Create(string key, long size, DateTimeOffset now) =>
-        new() { Id = key, Size = size, References = 1, CreatedAt = now };
+    public static Blob Create(string key, string location, long size, DateTimeOffset now) =>
+        new() { Id = key, Location = location.Length == 0 ? null : location, Size = size, References = 1, CreatedAt = now };
 
     public void AddReference() => References++;
 

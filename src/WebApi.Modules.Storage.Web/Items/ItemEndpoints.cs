@@ -17,6 +17,10 @@ public static class ItemEndpoints
             .WithName("Storage_GetRoots")
             .WithSummary("The navigation pane's starting points: Files and your home folder (created on first use).");
 
+        app.MapGet("/usage", async (ISender sender, CancellationToken ct) => (await sender.Send(new GetUsageQuery(), ct)).ToOkResult())
+            .WithName("Storage_GetUsage")
+            .WithSummary("The tenant's storage use: bytes kept, bytes of uploads under way, and the quota (null: none).");
+
         app.MapGet("/folders/{id:guid}/items", async (Guid id, ISender sender, CancellationToken ct) =>
                 (await sender.Send(new ListFolderQuery(id), ct)).ToOkResult())
             .WithName("Storage_ListFolder")

@@ -9,11 +9,14 @@
 //
 //   postgres ─► identity (5090)    tenant store + tenant databases + identity database, one server
 //            └► webapi (5080)  ◄── blzwebclient (5070)
+//   minio (9000, console 9001) ─┘  blobs (S3)
 //
-// Blobs (the local disk provider) go to playground/.data/blobs. MinIO joins in phase 2 (S3 provider).
+// Blobs go to MinIO, bucket "storage" (connection "minio"; the console's user is "playground", the password is the
+// generated parameter "minio-password" in the dashboard). Playground:Blobs=local keeps them on the local disk instead,
+// in playground/.data/blobs, which is also where files written before phase 2 stay.
 // The platform's projects build from the ModularBlazor.Platform checkout next to this repo (Storage.Playground.csproj).
-// It uses the same ports as the platform's Hybird lab, so stop the lab first. Data stays in the Docker volume
-// "storage-playground-data" and in playground/.data.
+// It uses the same ports as the platform's Hybird lab, so stop the lab first. Data stays in the Docker volumes
+// "storage-playground-data" and "storage-playground-minio", and in playground/.data.
 
 using System.Reflection;
 
@@ -22,6 +25,9 @@ var builder = DistributedApplication.CreateBuilder(args);
 var mode = (builder.Configuration["Playground:Mode"] ?? "dev").Trim().ToLowerInvariant();
 if (mode is not ("dev" or "install"))
     throw new InvalidOperationException($"Playground:Mode '{mode}' is not supported: use dev or install.");
+var blobs = (builder.Configuration["Playground:Blobs"] ?? "minio").Trim().ToLowerInvariant();
+if (blobs is not ("minio" or "local"))
+    throw new InvalidOperationException($"Playground:Blobs '{blobs}' is not supported: use minio or local.");
 
 // Fixed by the platform: the identity service registers the client's callbacks on 5070 and the client calls the API on 5080.
 const int IdentityPort = 5090;
@@ -76,6 +82,34 @@ var webApi = builder.AddProject<Projects.WebApi>("webapi", launchProfileName: nu
     .WithEnvironment("Access__DevGrants__1__Permissions__0", "storage.access")
     .WaitFor(identity)
     .WithHttpHealthCheck("/health");
+if (blobs == "minio")
+{
+    // S3 for the module's S3 store. Presigned download links point at http://localhost:9000, which the browser reaches.
+    const string MinioUser = "playground";
+    var minioPassword = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "minio-password", special: false);
+    var minio = builder.AddContainer("minio", "minio/minio", "RELEASE.2025-09-07T16-13-09Z")
+        .WithArgs("server", "/data", "--console-address", ":9001")
+        .WithEnvironment("MINIO_ROOT_USER", MinioUser)
+        .WithEnvironment("MINIO_ROOT_PASSWORD", minioPassword)
+        .WithHttpEndpoint(port: 9000, targetPort: 9000, name: "api")
+        .WithHttpEndpoint(port: 9001, targetPort: 9001, name: "console")
+        .WithVolume("storage-playground-minio", "/data")
+        .WithHttpHealthCheck("/minio/health/live", endpointName: "api");
+
+    // Host overrides of the module's settings: the connection (its secret never reaches the catalog record) and the
+    // default placement of every tenant's new files.
+    const string Storage = "Modules__Settings__storage__Storage__";
+    webApi.WithEnvironment(Storage + "Connections__minio__Kind", "S3")
+        .WithEnvironment(Storage + "Connections__minio__ServiceUrl", minio.GetEndpoint("api"))
+        .WithEnvironment(Storage + "Connections__minio__AccessKey", MinioUser)
+        .WithEnvironment(Storage + "Connections__minio__SecretKey", minioPassword)
+        .WithEnvironment(Storage + "Connections__minio__ForcePathStyle", "true")
+        .WithEnvironment(Storage + "Connections__minio__CreateBucket", "true")
+        .WithEnvironment(Storage + "Default__Connection", "minio")
+        .WithEnvironment(Storage + "Default__Bucket", "storage")
+        .WaitFor(minio);
+}
+
 if (mode == "dev")
 {
     const string ClientLocal = "Modules__Settings__client-modules__ClientModules__Local__";

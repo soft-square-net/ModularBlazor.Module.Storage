@@ -3,13 +3,18 @@
 
   <!--
     Infrastructure: the tenant DbContext (Data/StorageDbContext.cs), the entity mappings (Data/Config), the
-    migrations, one set per engine (Data/Migrations/<Provider>), and the blob store providers (Blobs/).
+    migrations, one set per engine (Data/Migrations/<Provider>), and the blob stores (Blobs/: the local disk, S3 / MinIO).
     References Core and UseCases (for IBlobStore). Not the entry assembly: WebApi.Modules.Storage.Web is.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\WebApi.Modules.Storage.Core\WebApi.Modules.Storage.Core.csproj" />
     <ProjectReference Include="..\WebApi.Modules.Storage.UseCases\WebApi.Modules.Storage.UseCases.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- S3 and MinIO. Private: copied into the module's output and loaded in its own load context. -->
+    <PackageReference Include="AWSSDK.S3" Version="$(AwsSdkS3Version)" />
   </ItemGroup>
 
   <ItemGroup>

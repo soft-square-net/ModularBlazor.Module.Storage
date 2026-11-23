@@ -24,6 +24,9 @@ public sealed class UploadSession : AggregateRoot<Guid>, ITenantOwned
 {
     public const int PartsLength = 20000;
 
+    /// <summary>Most chunks of one upload (an S3 ETag is about 34 characters; <see cref="Parts"/> holds them all).</summary>
+    public const int MaxParts = 500;
+
     private UploadSession() { } // EF Core
 
     public string TenantId { get; set; } = "";
@@ -35,6 +38,8 @@ public sealed class UploadSession : AggregateRoot<Guid>, ITenantOwned
     public long Received { get; private set; }
     public NameConflict Conflict { get; private set; }
     public string BlobKey { get; private set; } = "";
+    /// <summary>The store the bytes go to (see <c>Blob.Location</c>; null: the local disk).</summary>
+    public string? Location { get; private set; }
     /// <summary>The provider's id of the upload (S3 multipart upload id); null for the local disk.</summary>
     public string? ProviderUploadId { get; private set; }
     /// <summary>The provider's receipts of the parts sent so far (S3 ETags), one per line; null for the local disk.</summary>
@@ -48,7 +53,7 @@ public sealed class UploadSession : AggregateRoot<Guid>, ITenantOwned
     public bool IsComplete => Received == Size;
 
     public static UploadSession Start(Guid folderId, string name, string? contentType, long size, int chunkSize, long maxFileSize,
-        NameConflict conflict, string blobKey, string by, DateTimeOffset now, TimeSpan lifetime)
+        NameConflict conflict, string blobKey, string location, string by, DateTimeOffset now, TimeSpan lifetime)
     {
         if (size < 0) throw new DomainException("A size cannot be negative.");
         if (size > maxFileSize) throw new DomainException($"Files can be at most {maxFileSize:N0} bytes.");
@@ -61,9 +66,11 @@ public sealed class UploadSession : AggregateRoot<Guid>, ITenantOwned
             Name = ItemNames.Require(name),
             ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType.Trim(),
             Size = size,
-            ChunkSize = chunkSize,
+            // Bigger chunks for big files, so that no upload has more than MaxParts.
+            ChunkSize = (int)Math.Max(chunkSize, (size + MaxParts - 1) / MaxParts),
             Conflict = conflict,
             BlobKey = blobKey,
+            Location = location.Length == 0 ? null : location,
             CreatedBy = by,
             CreatedAt = now,
             ExpiresAt = now + lifetime

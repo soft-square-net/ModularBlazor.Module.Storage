@@ -12,8 +12,8 @@ public static class InfrastructureServiceExtensions
 {
     /// <summary>
     /// The module's data access and blob provider, in the module's own container: the tenant DbContext (and through it
-    /// <c>IRepository&lt;T&gt;</c> for the aggregates), the store the use cases share, and the local disk provider
-    /// (S3 / MinIO come in phase 2).
+    /// <c>IRepository&lt;T&gt;</c> for the aggregates), the store the use cases share, and the blob stores: the
+    /// local disk ("Storage:Local") and the named connections ("Storage:Connections:{name}": S3 / MinIO, or a folder).
     /// </summary>
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration settings)
     {
@@ -21,7 +21,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IStorageStore, StorageStore>();
 
         services.Configure<LocalBlobOptions>(settings.GetSection("Storage:Local"));
-        services.AddSingleton<IBlobStore, FileSystemBlobStore>();
+        services.Configure<BlobConnectionsOptions>(settings.GetSection("Storage"));
+        services.AddSingleton<IBlobStores, BlobStores>();
         return services;
     }
 }

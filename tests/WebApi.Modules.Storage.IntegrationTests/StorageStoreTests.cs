@@ -138,4 +138,22 @@ public sealed class StorageStoreTests : IDisposable
         live.Select(i => i.Name).ShouldBe(["keep.txt"]);
         (await store.WithSubfoldersAsync([root.Id, a.Id], Ct)).ShouldBe([root.Id]);
     }
+
+    [Fact]
+    public async Task UsageCountsBlobsOnceAndUploadsUnderWay()
+    {
+        var (_, a, _, _) = await SeedAsync();
+        await using (var db = _database.For("acme"))
+        {
+            var store = new StorageStore(db);
+            store.Add(Core.BlobAggregate.Blob.Create($"t/acme/2026/11/{Guid.NewGuid():N}", "minio|files|", 100, Now));
+            store.Add(Core.BlobAggregate.Blob.Create($"t/acme/2026/11/{Guid.NewGuid():N}", "", 20, Now));
+            store.Add(Core.UploadAggregate.UploadSession.Start(a.Id, "big.bin", null, 7, 1024, 1000, Core.UploadAggregate.NameConflict.Fail,
+                $"t/acme/2026/11/{Guid.NewGuid():N}", "", "ana", Now, TimeSpan.FromHours(1)));
+            await store.SaveAsync(Ct);
+        }
+
+        await using (var db = _database.For("acme")) (await new StorageStore(db).UsageAsync(Ct)).ShouldBe((120L, 7L));
+        await using (var db = _database.For("globex")) (await new StorageStore(db).UsageAsync(Ct)).ShouldBe((0L, 0L));
+    }
 }

@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Options;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Blobs;
 
 namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Blobs;
@@ -19,14 +18,16 @@ public sealed class LocalBlobOptions
 }
 
 /// <summary>
-/// Blobs as files under <see cref="LocalBlobOptions.Root"/>, at their keys (<c>t/acme/2026/11/0193...</c>). An upload
+/// Blobs as files under a root folder (<see cref="LocalBlobOptions.Root"/>, or a Local connection's), at their keys (<c>t/acme/2026/11/0193...</c>). An upload
 /// is a staging file in <c>.uploads/</c>, written chunk by chunk at its offset, then moved to the key. No presigned
 /// URLs: the module serves the bytes (with ranges) behind its own signed links.
 /// </summary>
-internal sealed partial class FileSystemBlobStore(IOptions<LocalBlobOptions> options) : IBlobStore
+internal sealed partial class FileSystemBlobStore(string root) : IBlobStore
 {
     private const int BufferSize = 81920;
-    private readonly string _root = options.Value.ResolvedRoot;
+    private readonly string _root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    public int MinPartSize => 1;
 
     public Task<string?> StartUploadAsync(string key, string contentType, CancellationToken ct)
     {
@@ -98,15 +99,12 @@ internal sealed partial class FileSystemBlobStore(IOptions<LocalBlobOptions> opt
     /// <summary>The file of a key. Keys are made by the module (<c>Blob.NewKey</c>); anything else is refused.</summary>
     private string PathOf(string key)
     {
-        if (!KeyPattern().IsMatch(key)) throw new ArgumentException("Invalid blob key.", nameof(key));
+        BlobKeys.Require(key);
         var path = Path.GetFullPath(Path.Combine(_root, key.Replace('/', Path.DirectorySeparatorChar)));
         return path.StartsWith(_root + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             ? path
             : throw new ArgumentException("Invalid blob key.", nameof(key));
     }
-
-    [GeneratedRegex("^t/[a-z0-9][a-z0-9._-]{0,63}/[0-9]{4}/[0-9]{2}/[0-9a-f]{32}$")]
-    private static partial Regex KeyPattern();
 
     [GeneratedRegex("^[0-9a-f]{32}$")]
     private static partial Regex UploadIdPattern();

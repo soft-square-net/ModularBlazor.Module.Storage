@@ -95,6 +95,7 @@ public sealed class BlobConfiguration : IEntityTypeConfiguration<Blob>
     {
         blob.ToTable("blobs");
         blob.Property(b => b.Id).HasMaxLength(FileVersion.BlobKeyLength).ValueGeneratedNever();
+        blob.Property(b => b.Location).HasMaxLength(Blob.LocationLength);
         blob.Property(b => b.References).IsConcurrencyToken();
     }
 }
@@ -109,6 +110,7 @@ public sealed class UploadSessionConfiguration : IEntityTypeConfiguration<Upload
         upload.Property(u => u.ContentType).HasMaxLength(Item.ContentTypeLength);
         upload.Property(u => u.Conflict).HasConversion<string>().HasMaxLength(DataSchemaConstants.EnumLength);
         upload.Property(u => u.BlobKey).HasMaxLength(FileVersion.BlobKeyLength);
+        upload.Property(u => u.Location).HasMaxLength(Blob.LocationLength);
         upload.Property(u => u.ProviderUploadId).HasMaxLength(1024);
         upload.Property(u => u.Parts).HasMaxLength(UploadSession.PartsLength);
         upload.Property(u => u.CreatedBy).HasMaxLength(Item.UserIdLength);

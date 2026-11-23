@@ -75,6 +75,13 @@ internal sealed class StorageStore(StorageDbContext db) : IStorageStore
     public async Task<IReadOnlyList<Blob>> BlobsAsync(IReadOnlyCollection<string> keys, CancellationToken ct) =>
         keys.Count == 0 ? [] : await db.Blobs.Where(b => keys.Contains(b.Id)).ToListAsync(ct);
 
+    public async Task<(long Used, long Pending)> UsageAsync(CancellationToken ct)
+    {
+        var used = await db.Blobs.SumAsync(b => (long?)b.Size, ct) ?? 0;
+        var pending = await db.Uploads.SumAsync(u => (long?)u.Size, ct) ?? 0;
+        return (used, pending);
+    }
+
     public Task<UploadSession?> UploadAsync(Guid id, CancellationToken ct) =>
         db.Uploads.FirstOrDefaultAsync(u => u.Id == id, ct);
 

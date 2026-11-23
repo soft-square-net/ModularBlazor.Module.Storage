@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using soft.square.net.WebApi.Modules.Storage.Infrastructure.Blobs;
 
 namespace soft.square.net.WebApi.Modules.Storage.IntegrationTests;
@@ -11,7 +10,7 @@ public sealed class FileSystemBlobStoreTests : IDisposable
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
     private static readonly string Key = $"t/acme/2026/11/{Guid.NewGuid():N}";
 
-    public FileSystemBlobStoreTests() => _store = new FileSystemBlobStore(Options.Create(new LocalBlobOptions { Root = _root }));
+    public FileSystemBlobStoreTests() => _store = new FileSystemBlobStore(_root);
 
     public void Dispose()
     {

@@ -21,4 +21,6 @@ public static class StorageMessages
     public const string Denied = "Access is denied.";
     public const string NotFound = "The item does not exist, or it is in the recycle bin.";
     public static string NameTaken(string name) => $"There is already an item named '{name}' in this folder.";
+    public static string QuotaExceeded(long quota) =>
+        $"Not enough space: the storage quota is {quota.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} bytes.";
 }

@@ -112,7 +112,7 @@ public class ItemMoveAndDelete
 public class UploadSessionChunks
 {
     private static UploadSession Start(long size) =>
-        UploadSession.Start(Guid.NewGuid(), "big.bin", null, size, chunkSize: 10, maxFileSize: 1000, NameConflict.Fail, "t/acme/2026/11/x", "ana", Now, TimeSpan.FromHours(1));
+        UploadSession.Start(Guid.NewGuid(), "big.bin", null, size, chunkSize: 10, maxFileSize: 1000, NameConflict.Fail, "t/acme/2026/11/x", "", "ana", Now, TimeSpan.FromHours(1));
 
     [Fact]
     public void TakesChunksInOrderAndOfTheRightSize()

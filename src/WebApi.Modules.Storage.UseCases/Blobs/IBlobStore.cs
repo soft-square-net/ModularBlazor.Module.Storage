@@ -4,12 +4,15 @@ namespace soft.square.net.WebApi.Modules.Storage.UseCases.Blobs;
 public sealed record BlobContent(Stream Stream, long Length);
 
 /// <summary>
-/// Where the bytes live: the local disk, or S3 / MinIO (phase 2). Keys come from <c>Blob.NewKey</c> and never change;
-/// the tree of folders and files is in the database only. Uploads are written in parts, in order, then completed,
-/// which maps to an S3 multipart upload and to a staging file on disk.
+/// Where the bytes live: a folder on disk, or a bucket in S3 / MinIO (one store per location, see <see cref="IBlobStores"/>).
+/// Keys come from <c>Blob.NewKey</c> and never change; the tree of folders and files is in the database only. Uploads
+/// are written in parts, in order, then completed, which maps to an S3 multipart upload and to a staging file on disk.
 /// </summary>
 public interface IBlobStore
 {
+    /// <summary>The smallest part the provider takes (every part but the last): 5 MiB on S3, 1 byte on disk.</summary>
+    int MinPartSize { get; }
+
     /// <summary>Starts an upload; returns the provider's upload id (S3) or null.</summary>
     Task<string?> StartUploadAsync(string key, string contentType, CancellationToken ct);
 

@@ -39,6 +39,9 @@ public interface IStorageStore
 
     Task<UploadSession?> UploadAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Bytes the tenant keeps (every blob once, however many copies use it) and bytes of uploads under way.</summary>
+    Task<(long Used, long Pending)> UsageAsync(CancellationToken ct);
+
     /// <summary>
     /// Finds a system folder, or creates and saves it; when another request created it at the same moment (the key or
     /// the name collides), returns that one.
