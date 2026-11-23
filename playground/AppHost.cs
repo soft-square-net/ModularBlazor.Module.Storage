@@ -1,6 +1,6 @@
 // Storage playground: a small platform with this repo's module in it, for local development. Two loops:
 //
-//   dev (default, launch profile "dev"): the WebApi loads the module, and its API client, straight from their build
+//   dev (default, launch profile "dev"): the WebApi loads the module, and its client parts, straight from their build
 //     output (Modules:Local and ClientModules:Local, Development only). Change code, rebuild, restart the "webapi"
 //     resource in the dashboard (or F5 again): the new build is installed and active, with no packing or uploading.
 //   install (launch profile "install"): the platform starts without the module, as in production. Every build zips
@@ -114,7 +114,8 @@ if (mode == "dev")
 {
     const string ClientLocal = "Modules__Settings__client-modules__ClientModules__Local__";
     webApi.WithEnvironment("Modules__Local__storage", Metadata("ModuleOutput"))
-        .WithEnvironment(ClientLocal + "WebApi.Modules.Storage.Client", Metadata("ApiClientOutput"));
+        .WithEnvironment(ClientLocal + "WebApi.Modules.Storage.Client", Metadata("ApiClientOutput"))
+        .WithEnvironment(ClientLocal + "Module.Storage", Metadata("UiOutput"));
 }
 
 builder.AddProject<Projects.ModularBlazor_BlzWebClient>("blzwebclient", launchProfileName: null)

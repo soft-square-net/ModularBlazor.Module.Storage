@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
+
+  <!--
+    Files: the Blazor client module of the Storage module, loaded by ModularBlazor.BlzWebClient. A Windows 11 style
+    file explorer (MudTail's "explorer", shipped by Layouts.Default) over the Storage API: browsing, new folders, rename,
+    move/copy/delete, chunked uploads (files and folders), downloads and image previews.
+
+    Shipped as soft.square.net.Module.Storage.dll alone (the client part of this repo's bundle). The API client is its
+    own hidden client module (WebApi.Modules.Storage.Client, listed in Dependencies): referenced here to compile, never
+    copied (Private=false). The host provides ModularBlazor.Abstractions (the Module SDK), Microsoft.Extensions.Http
+    and the WebAssembly authentication package.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" PrivateAssets="all" />
+    <!-- IStringLocalizer<T>: the host provides it (and reads this module's i18n/{culture}.json). -->
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" Version="10.0.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="10.0.*" PrivateAssets="all" />
+    <ProjectReference Include="..\WebApi.Modules.Storage.Client\WebApi.Modules.Storage.Client.csproj" Private="false" />
+  </ItemGroup>
+
+  <!-- Translations: i18n/{culture}.json as the resources "i18n/{culture}.json". Keys are the English texts. -->
+  <ItemGroup>
+    <Content Remove="i18n/**" />
+    <None Remove="i18n/**" />
+    <EmbeddedResource Include="i18n/*.json" LogicalName="i18n/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

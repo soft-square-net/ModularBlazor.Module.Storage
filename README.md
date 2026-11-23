@@ -4,10 +4,12 @@ Storage: the tenant's files and folders, with NTFS-style access control, behind 
 module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own
 as the bundle `storage`.
 
-> **Status: phase 2 of 7.** The API, the data model, the access control, and the blob stores (the local disk, S3 and
-> MinIO through named connections, with presigned downloads and per-tenant quotas) are in. The Explorer UI (phases 3-4;
-> its MudTail components are on the platform's `feat/mudtail-explorer` branch), the recycle bin and versions (phase 5),
-> sharing (phase 6) and the integration points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
+> **Status: phase 4 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
+> through named connections, with presigned downloads and per-tenant quotas) and the Files page (the Explorer: browsing,
+> new folders, rename, cut/copy/paste and drag to move, delete, uploads of files and folders, downloads, image previews)
+> are in. The Explorer needs MudTail's explorer component, on the platform's `feat/mudtail-explorer` branch. The
+> Security dialog and the image editor, the recycle bin and versions (phase 5), sharing (phase 6) and the integration
+> points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
 
 ## Layout
 
@@ -20,6 +22,7 @@ src/WebApi.Modules.Storage.UseCases/         use cases: Mediator commands and qu
 src/WebApi.Modules.Storage.Infrastructure/   data: StorageDbContext, configurations, tenant migrations per provider; the blob stores (disk, S3 / MinIO)
 src/WebApi.Modules.Storage.Web/              entry assembly: IRuntimeModule, the Carter route table, endpoints, signed download links
 src/WebApi.Modules.Storage.Client/           typed API client (NSwag), shipped as a hidden client module
+src/Module.Storage/                          Blazor client module "Files": the Explorer (MudTail's explorer over the API), i18n ar default
 src/openapi/   the saved OpenAPI document the client is generated from
 tests/         UnitTests (Core, UseCases; NSubstitute) and IntegrationTests (Infrastructure on SQLite, the disk and S3 stores)
 playground/    Aspire AppHost: the platform (from a Platform checkout) with this module, see "Developing"
@@ -152,7 +155,21 @@ Add a migration for every database provider:
 | Part | Project | Installed on |
 | --- | --- | --- |
 | server | `WebApi.Modules.Storage.Web` (its build output, zipped: every server layer plus the private Mediator, Ardalis.Result and AWS SDK) | Host Modules (`/host-modules`) |
-| client, hidden | `WebApi.Modules.Storage.Client` | Client Modules (`/client-modules`) |
+| client, hidden | `WebApi.Modules.Storage.Client` | Client Modules (`/client-modules`), first |
+| client | `Module.Storage`: menu item "Files", the page `/files` (`?folder={id}` opens a folder) | Client Modules, after the API client |
+
+`Module.Storage` lists the API client in its `Dependencies` and references it with `Private="false"`, so its output
+holds only `soft.square.net.Module.Storage.dll`. Each build also copies both client parts to `playground/out/client`.
+
+### The Explorer
+
+The page creates MudTail's `explorer` (from the Layouts.Default runtime) and answers its questions from the API: the
+places (My files, Files), folder listings and the tree, in-place renames, image previews (short-lived inline links), and
+the commands. Uploads go chunk by chunk (the chunk size the API sets; each chunk read from the browser), a taken name
+gets a number (`KeepBoth`), and a picked folder keeps its structure. The rights the API returns become the explorer's
+deny lists, so refused commands are greyed out: renaming, moving and deleting need `Delete` on the item or
+`DeleteChildren` on its folder; New folder needs `CreateFolders`, uploads `CreateFiles`. Search filters the open
+folder. Pinned folders (Quick access) are kept in the browser. Share, Security and Edit are disabled until their phases.
 
 ## Developing
 
@@ -164,12 +181,16 @@ API 5080, client 5070), so stop the Hybird lab first.
 
 | Profile | What it does |
 | --- | --- |
-| `dev` (default) | The WebApi loads the module and its API client straight from their build output (`Modules:Local`, Development only). Rebuild, restart the `webapi` resource |
+| `dev` (default) | The WebApi loads the module and its client parts straight from their build output (`Modules:Local`, `ClientModules:Local`; Development only). Rebuild, restart the `webapi` resource |
 | `install` | The platform starts without the module; every build zips it to `playground/out/storage.zip`, to upload on http://localhost:5070/host-modules and activate |
 
 ```bash
 dotnet run --project playground --launch-profile dev
 ```
+
+The Files page needs a platform with MudTail's explorer (until `feat/mudtail-explorer` is merged, point PlatformRoot at
+a checkout of that branch: `dotnet run --project playground -p:PlatformRoot=<that checkout>/`). Sign in on
+http://localhost:5070 as an `acme` account and open Files.
 
 In Development the platform seeds the tenants `acme` and `globex`; call the API with the header `X-Tenant: acme`. The
 playground grants, through `Access:DevGrants` (Development only, by email):
