@@ -1,0 +1,14 @@
+using Microsoft.EntityFrameworkCore.Design;
+using soft.square.net.WebApi.Data;
+
+namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data;
+
+/// <summary>
+/// Design time, one migration set per engine (Data/Migrations/&lt;Provider&gt;): add migrations with the platform's
+/// src/WebApi/scripts/Add-Migration.ps1 -Project &lt;this project&gt; -MigrationsDir Data/Migrations.
+/// </summary>
+internal sealed class StorageDesignTimeFactory : IDesignTimeDbContextFactory<StorageDbContext>
+{
+    public StorageDbContext CreateDbContext(string[] args) =>
+        new(TenantDbDesignTime.Options<StorageDbContext>(args), TenantDbDesignTime.Tenant);
+}

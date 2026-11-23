@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
+
+  <!--
+    Infrastructure: the tenant DbContext (Data/StorageDbContext.cs), the entity mappings (Data/Config), the
+    migrations, one set per engine (Data/Migrations/<Provider>), and the blob store providers (Blobs/).
+    References Core and UseCases (for IBlobStore). Not the entry assembly: WebApi.Modules.Storage.Web is.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\WebApi.Modules.Storage.Core\WebApi.Modules.Storage.Core.csproj" />
+    <ProjectReference Include="..\WebApi.Modules.Storage.UseCases\WebApi.Modules.Storage.UseCases.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="soft.square.net.WebApi.Modules.Storage.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

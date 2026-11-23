@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Integration tests of Infrastructure: the StorageDbContext mappings and the store against a real relational
+       database (SQLite in memory), and the local disk blob provider against a temporary folder. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
+    <!-- The host-shared data layer (EF Core, the platform repositories), which the module compiles against only. -->
+    <PackageReference Include="soft.square.net.WebApi.Data" Version="$(ModularBlazorPlatformVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WebApi.Modules.Storage.Infrastructure\WebApi.Modules.Storage.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Storage.UseCases\WebApi.Modules.Storage.UseCases.csproj" />
+  </ItemGroup>
+
+</Project>

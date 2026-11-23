@@ -1,5 +1,13 @@
 <Solution>
-  <Project Path="src/Storage.Application/Storage.Application.csproj" />
-  <Project Path="src/Storage.Domain/Storage.Domain.csproj" />
-  <Project Path="src/Storage.Infrastructure/Storage.Infrastructure.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/WebApi.Modules.Storage.Core/WebApi.Modules.Storage.Core.csproj" />
+    <Project Path="src/WebApi.Modules.Storage.UseCases/WebApi.Modules.Storage.UseCases.csproj" />
+    <Project Path="src/WebApi.Modules.Storage.Infrastructure/WebApi.Modules.Storage.Infrastructure.csproj" />
+    <Project Path="src/WebApi.Modules.Storage.Web/WebApi.Modules.Storage.Web.csproj" />
+    <Project Path="src/WebApi.Modules.Storage.Client/WebApi.Modules.Storage.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WebApi.Modules.Storage.UnitTests/WebApi.Modules.Storage.UnitTests.csproj" />
+    <Project Path="tests/WebApi.Modules.Storage.IntegrationTests/WebApi.Modules.Storage.IntegrationTests.csproj" />
+  </Folder>
 </Solution>

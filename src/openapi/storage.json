@@ -1,0 +1,1603 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Storage",
+    "description": "Folders and files with Windows-style access control lists, resumable uploads and signed download links.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/storage/roots": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "The navigation pane's starting points: Files and your home folder (created on first use).",
+        "operationId": "Storage_GetRoots",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Roots"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/folders/{id}/items": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Open a folder: its path and the items you have any right on, folders first (List folder).",
+        "operationId": "Storage_ListFolder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "An item's properties, path and versions (Read attributes).",
+        "operationId": "Storage_GetItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Rename (Delete on the item, or Delete children on its folder).",
+        "operationId": "Storage_RenameItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/folders": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "New folder (Create folders on the parent); numberIfTaken gives \"New folder (2)\".",
+        "operationId": "Storage_CreateFolder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/move": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Cut and paste, or drag: move items into a folder; each item moves on its own.",
+        "operationId": "Storage_MoveItems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveItemsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/copy": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Copy and paste: copies inherit from the destination; file copies share their blob.",
+        "operationId": "Storage_CopyItems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyItemsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/delete": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Delete to the recycle bin.",
+        "operationId": "Storage_DeleteItems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteItemsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/content": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "A file's bytes (Read data), the current version or another one; supports ranges.",
+        "operationId": "Storage_DownloadFile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "inline",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/link": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "A short-lived URL to download or show a file without the access token (img, video, PDF viewer).",
+        "operationId": "Storage_GetDownloadLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "inline",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadLink"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/uploads": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Start an upload into a folder (Create files). conflict: Fail, Replace or KeepBoth.",
+        "operationId": "Storage_StartUpload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartUploadCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/uploads/{id}": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Where an upload stands: send the chunk at 'received'.",
+        "operationId": "Storage_GetUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Cancel an upload and drop its bytes.",
+        "operationId": "Storage_CancelUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/storage/uploads/{id}/chunks": {
+      "put": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "One chunk of the file (form file \"chunk\"), at the offset the upload expects.",
+        "operationId": "Storage_WriteChunk",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "chunk"
+                ],
+                "type": "object",
+                "properties": {
+                  "chunk": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/uploads/{id}/complete": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Finish an upload: the file appears in the folder (or becomes a new version with Replace).",
+        "operationId": "Storage_CompleteUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/acl": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "An item's owner and access list: its own entries, then the inherited ones (Read permissions).",
+        "operationId": "Storage_GetAcl",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AclDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Set an item's own entries and inheritance (Change permissions).",
+        "operationId": "Storage_SetAcl",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAclRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AclDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/owner": {
+      "put": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Take ownership (no owner id; Take ownership), or give it to someone (Storage admins).",
+        "operationId": "Storage_SetOwner",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetOwnerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AclDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/effective-access": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "What a member may do with the item, through their entries, groups and grants (Read permissions).",
+        "operationId": "Storage_GetEffectiveAccess",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAccessDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/groups": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Every Storage group (the principal picker).",
+        "operationId": "Storage_ListGroups",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GroupDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Create a Storage group.",
+        "operationId": "Storage_CreateGroup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/groups/{id}": {
+      "put": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Rename a group or change its members (version: the one you read).",
+        "operationId": "Storage_UpdateGroup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Delete a group; entries that name it match nobody.",
+        "operationId": "Storage_DeleteGroup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AceDto": {
+        "required": [
+          "principalKind",
+          "principalId",
+          "principalScope",
+          "type",
+          "rights",
+          "inheritance",
+          "inherited",
+          "inheritedFromId",
+          "inheritedFromName"
+        ],
+        "type": "object",
+        "properties": {
+          "principalKind": {
+            "$ref": "#/components/schemas/PrincipalKind"
+          },
+          "principalId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "principalScope": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/AceType"
+          },
+          "rights": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inheritance": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inherited": {
+            "type": "boolean"
+          },
+          "inheritedFromId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "inheritedFromName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AceType": {
+        "enum": [
+          "Allow",
+          "Deny"
+        ],
+        "type": "string"
+      },
+      "AclDto": {
+        "required": [
+          "itemId",
+          "kind",
+          "ownerId",
+          "inheritsAccess",
+          "version",
+          "entries"
+        ],
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "inheritsAccess": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AceDto"
+            }
+          }
+        }
+      },
+      "BatchFailure": {
+        "required": [
+          "id",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "BatchResult": {
+        "required": [
+          "done",
+          "failed"
+        ],
+        "type": "object",
+        "properties": {
+          "done": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemDto"
+            }
+          },
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchFailure"
+            }
+          }
+        }
+      },
+      "CopyItemsCommand": {
+        "required": [
+          "ids",
+          "targetFolderId"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "targetFolderId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CreateFolderCommand": {
+        "required": [
+          "parentId",
+          "name",
+          "numberIfTaken"
+        ],
+        "type": "object",
+        "properties": {
+          "parentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "numberIfTaken": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Crumb": {
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/FolderRole"
+          }
+        }
+      },
+      "DeleteItemsCommand": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "DownloadLink": {
+        "required": [
+          "url",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EffectiveAccessDto": {
+        "required": [
+          "userId",
+          "rights",
+          "isAdmin",
+          "canUseStorage"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "rights": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isAdmin": {
+            "type": "boolean"
+          },
+          "canUseStorage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FolderRole": {
+        "enum": [
+          "Normal",
+          "Root",
+          "Homes",
+          "Home"
+        ],
+        "type": "string"
+      },
+      "FolderView": {
+        "required": [
+          "folder",
+          "path",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "folder": {
+            "$ref": "#/components/schemas/ItemDto"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Crumb"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemDto"
+            }
+          }
+        }
+      },
+      "GroupDto": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "members",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "GroupInput": {
+        "required": [
+          "name",
+          "description",
+          "members"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "members": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ItemDetail": {
+        "required": [
+          "item",
+          "path",
+          "versions"
+        ],
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/ItemDto"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Crumb"
+            }
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VersionDto"
+            }
+          }
+        }
+      },
+      "ItemDto": {
+        "required": [
+          "id",
+          "kind",
+          "role",
+          "parentId",
+          "name",
+          "extension",
+          "size",
+          "contentType",
+          "currentVersion",
+          "ownerId",
+          "inheritsAccess",
+          "createdAt",
+          "createdBy",
+          "modifiedAt",
+          "modifiedBy",
+          "version",
+          "rights",
+          "hasSubfolders"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "role": {
+            "$ref": "#/components/schemas/FolderRole"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "extension": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contentType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "currentVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "inheritsAccess": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modifiedBy": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rights": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasSubfolders": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ItemKind": {
+        "enum": [
+          "Folder",
+          "File"
+        ],
+        "type": "string"
+      },
+      "MoveItemsCommand": {
+        "required": [
+          "ids",
+          "targetFolderId"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "targetFolderId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "NameConflict": {
+        "enum": [
+          "Fail",
+          "Replace",
+          "KeepBoth"
+        ],
+        "type": "string"
+      },
+      "PrincipalKind": {
+        "enum": [
+          "User",
+          "Everyone",
+          "Permission",
+          "Group",
+          "CreatorOwner"
+        ],
+        "type": "string"
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RenameRequest": {
+        "required": [
+          "name",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "Roots": {
+        "required": [
+          "files",
+          "home"
+        ],
+        "type": "object",
+        "properties": {
+          "files": {
+            "$ref": "#/components/schemas/ItemDto"
+          },
+          "home": {
+            "$ref": "#/components/schemas/ItemDto"
+          }
+        }
+      },
+      "SetAclRequest": {
+        "required": [
+          "inheritsAccess",
+          "entries",
+          "convertInherited",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "inheritsAccess": {
+            "type": "boolean"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AceDto"
+            }
+          },
+          "convertInherited": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SetOwnerRequest": {
+        "required": [
+          "ownerId"
+        ],
+        "type": "object",
+        "properties": {
+          "ownerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "StartUploadCommand": {
+        "required": [
+          "folderId",
+          "name",
+          "size",
+          "contentType",
+          "conflict"
+        ],
+        "type": "object",
+        "properties": {
+          "folderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contentType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "conflict": {
+            "$ref": "#/components/schemas/NameConflict"
+          }
+        }
+      },
+      "Stream": {
+        "type": "string",
+        "format": "binary"
+      },
+      "UploadDto": {
+        "required": [
+          "id",
+          "folderId",
+          "name",
+          "size",
+          "chunkSize",
+          "received",
+          "conflict",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chunkSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "received": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "conflict": {
+            "$ref": "#/components/schemas/NameConflict"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "VersionDto": {
+        "required": [
+          "number",
+          "size",
+          "contentType",
+          "createdAt",
+          "createdBy"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "http://localhost:5090/connect/authorize",
+            "tokenUrl": "http://localhost:5090/connect/token",
+            "scopes": {
+              "openid": "User identity",
+              "profile": "User profile",
+              "email": "User email",
+              "api": "Access to Modular WebApi",
+              "offline_access": "Refresh token"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "OAuth2": [
+        "openid",
+        "profile",
+        "email",
+        "api"
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "Storage"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
+
+  <!--
+    Core (the domain model): the Item aggregate (a folder or a file, its NTFS-style access control list and its
+    versions), the access evaluator, Storage groups, blobs and upload sessions. No references to other layers.
+    The Module SDK compiles it against WebApi.SharedKernel and Ardalis.Specification, both provided by the host.
+  -->
+
+  <PropertyGroup>
+    <ModuleLayer>Domain</ModuleLayer>
+  </PropertyGroup>
+
+</Project>
