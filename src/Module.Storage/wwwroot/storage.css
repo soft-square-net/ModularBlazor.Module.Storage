@@ -1,5 +1,5 @@
 /* Module.Storage (Files): the page around MudTail's explorer. Colours come from the --mud-palette-* tokens of
-   Layouts.Default; the explorer styles itself. */
+   UI.MudTail; the explorer styles itself. */
 .st-page { display: flex; flex-direction: column; gap: 8px; height: calc(100dvh - var(--mud-appbar-height, 64px) - 24px); min-height: 420px; padding-block: 8px; }
 .st-page h1 { margin: 0; }
 .st-explorer { flex: 1 1 auto; min-height: 0; display: flex; }

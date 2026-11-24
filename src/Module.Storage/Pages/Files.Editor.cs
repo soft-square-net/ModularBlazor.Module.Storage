@@ -7,7 +7,7 @@ using soft.square.net.WebApi.Modules.Storage.Client;
 namespace soft.square.net.Module.Storage.Pages;
 
 /// <summary>
-/// The image editor (MudTail's imageEditor, from Layouts.Default) and the Security dialog. The editor opens a JPEG, PNG or
+/// The image editor (MudTail's imageEditor, from UI.MudTail) and the Security dialog. The editor opens a JPEG, PNG or
 /// WebP file through a short-lived inline link; Save stores the edited image as a new version of the file (same name and
 /// type, so links and pickers keep pointing at it), Save as a copy as a new file next to it ("a (2).png"). Both are
 /// ordinary uploads, so the server checks the rights, the quota and the virus scan as for any upload.

@@ -2,17 +2,16 @@
 @implements IAsyncDisposable
 
 @*
-  Files: the tenant's files and folders in MudTail's Windows 11 style explorer (Layouts.Default's runtime,
+  Files: the tenant's files and folders in MudTail's Windows 11 style explorer (UI.MudTail's runtime,
   create('explorer', ...)). The explorer asks this page every question (places, list, children, rename, preview,
   command) and the page answers from the Storage API (/api/storage). ?folder={id} opens that folder.
 *@
 
-<PageTitle>@L["Files"]</PageTitle>
+<PageHeader Title="@L["Files"]" />
 
 <div class="mud-container mud-container--maxwidth-false st-page">
   @if (_error is not null)
   {
-    <h1 class="mud-typography mud-typography-h5">@L["Files"]</h1>
     <p class="st-error" role="alert">@_error</p>
   }
   else if (_loading)

@@ -3,7 +3,7 @@
 
   <!--
     Files: the Blazor client module of the Storage module, loaded by ModularBlazor.BlzWebClient. A Windows 11 style
-    file explorer (MudTail's "explorer", shipped by Layouts.Default) over the Storage API: browsing, new folders, rename,
+    file explorer (MudTail's "explorer", shipped by UI.MudTail) over the Storage API: browsing, new folders, rename,
     move/copy/delete, chunked uploads (files and folders), downloads and image previews.
 
     Shipped as soft.square.net.Module.Storage.dll alone (the client part of this repo's bundle). The API client is its

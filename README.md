@@ -243,7 +243,7 @@ so the anonymous Shared links module can load it; its endpoints still need a tok
 
 ### The Explorer
 
-The page creates MudTail's `explorer` (from the Layouts.Default runtime) and answers its questions from the API: the
+The page creates MudTail's `explorer` (from the UI.MudTail runtime) and answers its questions from the API: the
 places (My files, Files), folder listings and the tree, in-place renames, image previews (short-lived inline links), and
 the commands. Uploads go chunk by chunk (the chunk size the API sets; each chunk read from the browser), a taken name
 gets a number (`KeepBoth`), and a picked folder keeps its structure. The rights the API returns become the explorer's
