@@ -159,9 +159,12 @@
           {
             <button type="button" class="st-btn" disabled="@(_busy || _dirty)" @onclick="() => SetOwnerAsync(null)">@L["Take ownership"]</button>
           }
-          <button type="button" class="st-btn" disabled="@(_busy || _dirty)" @onclick="() => _changingOwner = !_changingOwner">@L["Change…"]</button>
+          @if (CanTakeOwnership) @* Storage admins have every right, so they see it too (giving ownership is theirs) *@
+          {
+            <button type="button" class="st-btn" disabled="@(_busy || _dirty)" @onclick="() => _changingOwner = !_changingOwner">@L["Change…"]</button>
+          }
         </div>
-        @if (_dirty && !_changingOwner)
+        @if (_dirty && !_changingOwner && CanTakeOwnership)
         {
           <p class="st-muted st-small">@L["Apply or cancel your changes before changing the owner."]</p>
         }
