@@ -20,8 +20,17 @@ jobs:
     env:
       # NuGet.Config reads the feed's token from here.
       GITHUB_PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+      # ImageSharp 4 (thumbnails) checks its Six Labors license in Release builds; MSBuild reads this as the
+      # SixLaborsLicenseKey property. See Directory.Build.props. Never commit the key or a sixlabors.lic file.
+      SixLaborsLicenseKey: ${{ secrets.SIXLABORS_LICENSE_KEY }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Six Labors license
+        if: env.SixLaborsLicenseKey == ''
+        run: |
+          echo "::error::The SIXLABORS_LICENSE_KEY secret is missing. ImageSharp 4 needs a Six Labors license key in Release builds: add it as a repository (or organization) Actions secret named SIXLABORS_LICENSE_KEY."
+          exit 1
 
       - uses: actions/setup-dotnet@v4
         with:
