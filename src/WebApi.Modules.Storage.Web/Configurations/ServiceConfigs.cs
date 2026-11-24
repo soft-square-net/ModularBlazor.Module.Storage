@@ -5,6 +5,7 @@ using soft.square.net.WebApi.Modules.Storage.UseCases.Access;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Behaviors;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Blobs;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Items;
+using soft.square.net.WebApi.Modules.Storage.UseCases.Sharing;
 using soft.square.net.WebApi.Modules.Storage.Web.Extensions;
 
 namespace soft.square.net.WebApi.Modules.Storage.Web.Configurations;
@@ -23,6 +24,9 @@ public static class ServiceConfigs
         services.AddScoped<StorageCaller>();
         services.AddScoped<ItemAccess>();
         services.AddScoped<Purger>();
+        services.AddScoped<PeopleBook>();
+        services.AddScoped<Sharer>();
+        services.AddScoped<ICallerProfile, CallerProfile>();
         services.AddHostedService<StorageSweeper>();
         services.AddSingleton<IDownloadTickets, DownloadTickets>();
 

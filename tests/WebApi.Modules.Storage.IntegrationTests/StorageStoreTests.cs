@@ -191,4 +191,45 @@ public sealed class StorageStoreTests : IDisposable
         }
         await using (var db = _database.For("globex")) (await new StorageStore(db).RecycleBinAsync(null, Ct)).ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task TheSharingQueries()
+    {
+        var (_, a, b, doc) = await SeedAsync();
+        string token;
+        await using (var db = _database.For("acme"))
+        {
+            var store = new StorageStore(db);
+            var file = (await store.ChainAsync(doc.Id, Ct))![^1];
+            file.SetAccess(true, [AccessEntry.Create(PrincipalKind.User, "bob", null, AceType.Allow, StorageRights.ReadAndExecute)], "ana", Now);
+            var folder = (await store.ChainAsync(b.Id, Ct))![^1];
+            folder.SetAccess(true, [AccessEntry.Create(PrincipalKind.User, "bob", null, AceType.Deny, StorageRights.Delete)], "ana", Now);
+            folder.SetPublic(true, "ana", Now);
+            store.Add(Core.PersonAggregate.StoragePerson.Create("bob", "Bob Builder", "bob@example.test", Now));
+            store.Add(Core.PersonAggregate.StoragePerson.Create("ana", "Ana Lyst", "ana@example.test", Now));
+            var link = Core.ShareAggregate.ShareLink.Create(a.Id, "ana", null, "pw", 3, Now);
+            token = link.Token;
+            store.Add(link);
+            await store.SaveAsync(Ct);
+        }
+
+        await using (var db = _database.For("acme"))
+        {
+            var store = new StorageStore(db);
+            (await store.SharedWithAsync("bob", 10, Ct)).Select(i => i.Id).ShouldBe([doc.Id]); // allow entries only
+            (await store.SearchPeopleAsync("builder", 10, Ct)).Select(p => p.UserId).ShouldBe(["bob"]);
+            (await store.SearchPeopleAsync("example.test", 10, Ct)).Select(p => p.UserId).ShouldBe(["ana", "bob"]);
+            (await store.PeopleAsync(["bob", "nobody"], Ct)).ShouldHaveSingleItem().Name.ShouldBe("Bob Builder");
+            var link = (await store.LinkByTokenAsync(token, Ct)).ShouldNotBeNull();
+            link.Accepts("pw").ShouldBeTrue();
+            (await store.LinksOfAsync(a.Id, Ct)).ShouldHaveSingleItem().Id.ShouldBe(link.Id);
+            (await store.ChainAsync(b.Id, Ct))![^1].IsPublic.ShouldBeTrue();
+        }
+        await using (var db = _database.For("globex"))
+        {
+            var store = new StorageStore(db);
+            (await store.LinkByTokenAsync(token, Ct)).ShouldBeNull(); // another tenant's link
+            (await store.SearchPeopleAsync("bob", 10, Ct)).ShouldBeEmpty();
+        }
+    }
 }

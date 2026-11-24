@@ -1,4 +1,6 @@
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.ShareAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate;
 
 namespace soft.square.net.WebApi.Modules.Storage.UseCases.Items;
@@ -62,6 +64,23 @@ public interface IStorageStore
     /// the name collides), returns that one.
     /// </summary>
     Task<Item> EnsureAsync(Func<CancellationToken, Task<Item?>> find, Func<Item> create, CancellationToken ct);
+
+    /// <summary>Items with an explicit allow entry for this user (shared with them), not deleted themselves, newest first.</summary>
+    Task<IReadOnlyList<Item>> SharedWithAsync(string userId, int take, CancellationToken ct);
+
+    Task<StoragePerson?> PersonAsync(string userId, CancellationToken ct);
+
+    /// <summary>People whose name or email contains <paramref name="search"/> (lower case), by name.</summary>
+    Task<IReadOnlyList<StoragePerson>> SearchPeopleAsync(string search, int take, CancellationToken ct);
+
+    Task<IReadOnlyList<StoragePerson>> PeopleAsync(IReadOnlyCollection<string> userIds, CancellationToken ct);
+
+    /// <summary>An item's share links, oldest first.</summary>
+    Task<IReadOnlyList<ShareLink>> LinksOfAsync(Guid itemId, CancellationToken ct);
+
+    Task<ShareLink?> LinkAsync(Guid id, CancellationToken ct);
+
+    Task<ShareLink?> LinkByTokenAsync(string token, CancellationToken ct);
 
     void Add<T>(T entity) where T : class;
 

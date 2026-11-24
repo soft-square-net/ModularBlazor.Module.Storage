@@ -20,6 +20,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
     private const string PinnedKey = "storage.explorer.pinned";
     /// <summary>The recycle bin's place id (not a folder: the API's GET /recycle-bin).</summary>
     private const string BinId = "recycle-bin";
+    /// <summary>"Shared with me": items others shared with the caller by name (GET /shared-with-me).</summary>
+    private const string SharedId = "shared-with-me";
     /// <summary>The bin's own commands (hidden in the live tree), and the commands that make no sense in the bin.</summary>
     private static readonly string[] BinOnly = ["restore", "emptyBin"];
     private static readonly string[] NotInBin = ["open", "download", "rename", "cut", "copy", "moveTo", "copyTo", "share", "edit", "security", "versions", "pin", "openTab"];
@@ -137,7 +139,13 @@ public partial class Files : ComponentBase, IAsyncDisposable
         catch (Exception ex)
         {
             var message = Describe(ex);
-            if (kind is "list" or "command") await MudTail.ToastAsync(message, "error");
+            // A folder that cannot be listed (no rights, gone): the explorer shows the message in its own panel.
+            if (kind is "list" or "children")
+            {
+                await CallAsync("reject", requestId, message);
+                return;
+            }
+            if (kind == "command") await MudTail.ToastAsync(message, "error");
             await CallAsync("resolve", requestId, kind == "command" ? false : null);
             return;
         }
@@ -150,12 +158,14 @@ public partial class Files : ComponentBase, IAsyncDisposable
     [
         new { id = _roots!.Home.Id.ToString(), name = L["My files"].Value, hasChildren = _roots.Home.HasSubfolders, icon = "home" },
         new { id = _roots.Files.Id.ToString(), name = L["Files"].Value, hasChildren = true, icon = "drive" },
+        new { id = SharedId, name = L["Shared with me"].Value, hasChildren = false, icon = "share" },
         new { id = BinId, name = L["Recycle bin"].Value, hasChildren = false, icon = "delete" },
     ];
 
     private async Task<object> ListAsync(JsonElement request)
     {
         if (Text(request, "folderId") == BinId) return await BinAsync(Text(request, "search")?.Trim());
+        if (Text(request, "folderId") == SharedId) return await SharedWithMeAsync(Text(request, "search")?.Trim());
         var id = Id(request, "folderId") ?? throw new InvalidOperationException(L["This place has no files."]);
         var view = await Api.ListFolderAsync(id);
         var search = Text(request, "search")?.Trim();
@@ -192,6 +202,20 @@ public partial class Files : ComponentBase, IAsyncDisposable
                     origin = string.Join(" › ", d.OriginalPath.Select(CrumbName)),
                     deny = NotInBin,
                 }),
+        };
+    }
+
+    /// <summary>"Shared with me" as a folder: what others shared with the caller; each item keeps its own rights.</summary>
+    private async Task<object> SharedWithMeAsync(string? search)
+    {
+        var shared = await Api.GetSharedWithMeAsync();
+        var name = L["Shared with me"].Value;
+        return new
+        {
+            folder = new { id = SharedId, name, kind = "folder", @virtual = true, deny = new[] { "newFolder", "upload", "paste", "moveTo", "copyTo", "restore", "emptyBin" } },
+            path = new[] { new { id = SharedId, name } },
+            items = shared.Where(s => string.IsNullOrEmpty(search) || s.Item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+                .Select(s => ToItem(s.Item, 0)),
         };
     }
 
@@ -278,6 +302,9 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 return null;
             case "properties":
                 await CallAsync("toggleDetails", true);
+                return null;
+            case "share":
+                if (items is [var one]) await ShowShareAsync(one);
                 return null;
             default:
                 await MudTail.ToastAsync(L["This command is not available yet."], "info");
@@ -598,7 +625,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
     /// on its folder; reading a file needs ListFolder (ReadData); top folders and home folders stay where they are.</summary>
     private static string[] ItemDeny(ItemDto item, int folderRights)
     {
-        var deny = new List<string> { "share", "edit", "security" }; // later phases
+        var deny = new List<string> { "edit", "security" }; // later phases
+        if (!Has(item.Rights, Rights.Share)) deny.Add("share");
         deny.AddRange(BinOnly);
         if (item.Kind == ItemKind.Folder) deny.Add("versions");
         var removable = item.Role == FolderRole.Normal && (Has(item.Rights, Rights.Delete) || Has(folderRights, Rights.DeleteChildren));
@@ -629,6 +657,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
         CreateFolders = 0x4,
         DeleteChildren = 0x40,
         Delete = 0x10000,
+        Share = 0x1000000,
     }
 
     /// <summary>An item as the explorer sends it back (the fields this page gave it).</summary>

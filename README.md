@@ -4,12 +4,13 @@ Storage: the tenant's files and folders, with NTFS-style access control, behind 
 module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own
 as the bundle `storage`.
 
-> **Status: phase 5 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
+> **Status: phase 6 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
 > through named connections, with presigned downloads and per-tenant quotas), the Files page (the Explorer: browsing,
 > new folders, rename, cut/copy/paste and drag to move, delete, uploads of files and folders, downloads, image previews),
-> the recycle bin, previous versions and the sweeper (purging old deletions, unused blobs and abandoned uploads) are in.
+> the recycle bin, previous versions, the sweeper (purging old deletions, unused blobs and abandoned uploads) and sharing
+> (with people, by links, public folders) are in.
 > The Explorer needs MudTail's explorer component, on the platform's `feat/mudtail-explorer` branch. The Security
-> dialog and the image editor, sharing (phase 6) and the integration points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
+> dialog and the image editor and the integration points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
 
 ## Layout
 
@@ -23,6 +24,7 @@ src/WebApi.Modules.Storage.Infrastructure/   data: StorageDbContext, configurati
 src/WebApi.Modules.Storage.Web/              entry assembly: IRuntimeModule, the Carter route table, endpoints, signed download links
 src/WebApi.Modules.Storage.Client/           typed API client (NSwag), shipped as a hidden client module
 src/Module.Storage/                          Blazor client module "Files": the Explorer (MudTail's explorer over the API), i18n ar default
+src/Module.Storage.Shares/                   Blazor client module "Shared links": the anonymous page that opens a share link (/s/{tenant}/{token})
 src/openapi/   the saved OpenAPI document the client is generated from
 tests/         UnitTests (Core, UseCases; NSubstitute) and IntegrationTests (Infrastructure on SQLite, the disk and S3 stores)
 playground/    Aspire AppHost: the platform (from a Platform checkout) with this module, see "Developing"
@@ -56,6 +58,13 @@ playground/    Aspire AppHost: the platform (from a Platform checkout) with this
 - **Where blobs live:** each tenant has a placement (a named connection, a bucket, a key prefix) and an optional quota.
   A blob remembers where it was written, so a new placement moves only new files. The quota counts what the tenant
   keeps (every version; a blob shared by copies once) plus uploads under way.
+- **Sharing** is three things. *With people*: the Share dialog writes the person's access entries on the item (view =
+  read and execute, edit = modify; a folder's entries reach its subfolders and files); it needs the new right `Share`
+  (edit also needs `Modify` yourself). The people are Storage's own list: members who have opened Files, with the name
+  and email from their token. *Links*: "anyone with the link" for a file or a folder, read-only, with an optional
+  expiry, password (PBKDF2; sent in the `X-Share-Password` header, never in a URL) and download limit; revocable,
+  at most 20 per item. *Public folders*: everything in (and below) a public folder has a stable anonymous address,
+  `/api/storage/public/{tenant}/{fileId}/{name}`, for Content's published pages.
 
 ## API
 
@@ -84,6 +93,20 @@ Under `/api/storage`, tenant-bound (header `X-Tenant`, the host name or the toke
 | `DELETE /items/{id}/versions/{number}` | Delete an old version (not the current one) |
 | `GET /groups`; `POST`, `PUT`, `DELETE /groups/...` (`storage.admin`) | Storage groups |
 | `POST /maintenance/sweep` (`storage.admin`) | Run the tenant's sweep now; returns what it purged and freed |
+| `GET /people?search=` | Storage's people (members who have used Files), by name or email; at least 2 characters |
+| `GET /shared-with-me` | Items shared with the caller by name, with the owner and where they are |
+| `GET /items/{id}/sharing` | The Share dialog: the people, the links, whether the folder is (or is in) a public folder |
+| `POST /items/{id}/sharing/people`, `DELETE /items/{id}/sharing/people/{userId}` | Share with people (`View` or `Edit`), stop sharing |
+| `PUT /items/{id}/sharing/public` | Make a folder public, or not (`Share` and `ChangePermissions`) |
+| `POST /items/{id}/sharing/links`, `DELETE /sharing/links/{linkId}` | Create a link (expiry, password, download limit), remove one |
+
+Anonymous (no token; the tenant is in the URL):
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /shares/{tenant}/{token}?folderId=` | Open a link: the shared item, or a folder in it (header `X-Share-Password` when it has one); 401 for a missing or wrong password, 404 when it no longer works |
+| `GET /shares/{tenant}/{token}/files/{fileId}/link?inline=` | A short-lived download link of a file in the share; counts a download |
+| `GET /public/{tenant}/{fileId}/{name}` | A file in a public folder: a redirect to a short-lived link (cached a minute) |
 
 ## Settings
 
@@ -170,9 +193,11 @@ Add a migration for every database provider:
 | server | `WebApi.Modules.Storage.Web` (its build output, zipped: every server layer plus the private Mediator, Ardalis.Result and AWS SDK) | Host Modules (`/host-modules`) |
 | client, hidden | `WebApi.Modules.Storage.Client` | Client Modules (`/client-modules`), first |
 | client | `Module.Storage`: menu item "Files", the page `/files` (`?folder={id}` opens a folder) | Client Modules, after the API client |
+| client | `Module.Storage.Shares`: no menu item, the page `/s/{tenant}/{token}`, layout `public`, no sign-in | Client Modules, after the API client |
 
 `Module.Storage` lists the API client in its `Dependencies` and references it with `Private="false"`, so its output
-holds only `soft.square.net.Module.Storage.dll`. Each build also copies both client parts to `playground/out/client`.
+holds only `soft.square.net.Module.Storage.dll`. The API client does not require sign-in itself (`RequiresAuth = false`),
+so the anonymous Shared links module can load it; its endpoints still need a token, except the anonymous ones above. Each build also copies both client parts to `playground/out/client`.
 
 ### The Explorer
 
@@ -182,7 +207,12 @@ the commands. Uploads go chunk by chunk (the chunk size the API sets; each chunk
 gets a number (`KeepBoth`), and a picked folder keeps its structure. The rights the API returns become the explorer's
 deny lists, so refused commands are greyed out: renaming, moving and deleting need `Delete` on the item or
 `DeleteChildren` on its folder; New folder needs `CreateFolders`, uploads `CreateFiles`. Search filters the open
-folder. Pinned folders (Quick access) are kept in the browser. Share, Security and Edit are disabled until their phases.
+folder. Pinned folders (Quick access) are kept in the browser. Security and Edit are disabled until their phases.
+
+**Share** (a file's or folder's context menu, or the command bar, for those with the `Share` right) opens the Share
+dialog: add people by name or email with view or edit access, change or remove it; create links (each is copied when
+made) and remove them; make a folder public, or copy a file's public address when it is in a public folder.
+**Shared with me** is a place in the navigation pane listing what others shared with the caller by name.
 
 The **Recycle bin** is a place in the navigation pane: Date modified is when the item was deleted; Restore puts the
 selection back, Delete purges it, and Empty recycle bin purges everything the caller can see, each after asking.

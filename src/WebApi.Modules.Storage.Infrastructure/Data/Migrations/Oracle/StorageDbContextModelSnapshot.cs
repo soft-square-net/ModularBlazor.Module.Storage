@@ -125,6 +125,9 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                     b.Property<bool>("InheritsAccess")
                         .HasColumnType("BOOLEAN");
 
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("BOOLEAN");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -194,6 +197,103 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                         .HasFilter("\"ParentId\" IS NOT NULL");
 
                     b.ToTable("storage_items", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate.StoragePerson", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("NVARCHAR2(256)");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.Property<string>("SearchKey")
+                        .IsRequired()
+                        .HasMaxLength(457)
+                        .HasColumnType("NVARCHAR2(457)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("storage_people", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.ShareAggregate.ShareLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
+                    b.Property<int>("Downloads")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<int?>("MaxDownloads")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("NVARCHAR2(32)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("NUMBER(10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("storage_share_links", (string)null);
                 });
 
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate.UploadSession", b =>

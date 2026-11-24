@@ -1,0 +1,104 @@
+@page "/s/{Tenant}/{Token}"
+
+@*
+  A share link, opened without signing in: the shared file (download or open), or the shared folder to browse
+  read-only (?folder={id} below it). The link's password, when it has one, is asked here and sent in a header.
+*@
+
+<PageTitle>@(_view?.Shared.Name ?? L["Shared link"].Value)</PageTitle>
+
+<main class="sl-page">
+  @if (_loading && _view is null)
+  {
+    <p class="sl-muted">@L["Loading…"]</p>
+  }
+  else if (_gone is not null)
+  {
+    <h1 class="sl-title">@L["Shared link"]</h1>
+    <p class="sl-error" role="alert">@_gone</p>
+  }
+  else if (_needsPassword)
+  {
+    <form class="sl-card sl-password" @onsubmit="UnlockAsync" @onsubmit:preventDefault>
+      <h1 class="sl-title">@L["This link is protected"]</h1>
+      <label class="sl-field">@L["Password"]
+        <input class="sl-input" type="password" autocomplete="off" @bind="_passwordInput" autofocus />
+      </label>
+      @if (_wrongPassword)
+      {
+        <p class="sl-error" role="alert">@L["The password is wrong."]</p>
+      }
+      <button type="submit" class="sl-btn sl-btn--primary" disabled="@_loading">@L["Open"]</button>
+    </form>
+  }
+  else if (_view is { } view)
+  {
+    <header class="sl-head">
+      <h1 class="sl-title">@view.Shared.Name</h1>
+      <p class="sl-muted">@L["Shared with you by a link"]@(view.ExpiresAt is { } end ? " · " + L["until {0}", end.ToLocalTime().ToString("d")] : "")</p>
+    </header>
+
+    @if (view.Shared.Kind == ItemKind.File)
+    {
+      <div class="sl-card sl-file">
+        <span class="sl-icon" aria-hidden="true">📄</span>
+        <div class="sl-grow">
+          <strong>@view.Shared.Name</strong>
+          <div class="sl-muted">@SizeText(view.Shared.Size) · @view.Shared.ModifiedAt.ToLocalTime().ToString("g")</div>
+        </div>
+        <button type="button" class="sl-btn" @onclick="() => OpenAsync(view.Shared, inline: true)" disabled="@_loading">@L["Open"]</button>
+        <button type="button" class="sl-btn sl-btn--primary" @onclick="() => OpenAsync(view.Shared, inline: false)" disabled="@_loading">@L["Download"]</button>
+      </div>
+    }
+    else
+    {
+      <nav class="sl-crumbs" aria-label="@L["Path"]">
+        @for (var i = 0; i < view.Path.Count; i++)
+        {
+          var crumb = view.Path[i];
+          if (i > 0) { <span class="sl-sep" aria-hidden="true">›</span> }
+          if (i == view.Path.Count - 1) { <span aria-current="page">@crumb.Name</span> }
+          else { <a href="@FolderHref(crumb.Id)">@crumb.Name</a> }
+        }
+      </nav>
+      @if (view.Items.Count == 0)
+      {
+        <p class="sl-muted">@L["This folder is empty."]</p>
+      }
+      else
+      {
+        <table class="sl-table">
+          <thead><tr><th>@L["Name"]</th><th>@L["Date modified"]</th><th>@L["Size"]</th><th></th></tr></thead>
+          <tbody>
+            @foreach (var item in view.Items)
+            {
+              <tr>
+                @if (item.Kind == ItemKind.Folder)
+                {
+                  <td><a href="@FolderHref(item.Id)"><span aria-hidden="true">📁</span> @item.Name</a></td>
+                  <td>@item.ModifiedAt.ToLocalTime().ToString("g")</td>
+                  <td></td>
+                  <td></td>
+                }
+                else
+                {
+                  <td><span aria-hidden="true">📄</span> @item.Name</td>
+                  <td>@item.ModifiedAt.ToLocalTime().ToString("g")</td>
+                  <td>@SizeText(item.Size)</td>
+                  <td class="sl-actions">
+                    <button type="button" class="sl-btn" @onclick="() => OpenAsync(item, inline: true)" disabled="@_loading">@L["Open"]</button>
+                    <button type="button" class="sl-btn" @onclick="() => OpenAsync(item, inline: false)" disabled="@_loading">@L["Download"]</button>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+    @if (_error is not null)
+    {
+      <p class="sl-error" role="alert">@_error</p>
+    }
+  }
+</main>

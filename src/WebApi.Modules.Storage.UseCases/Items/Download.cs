@@ -39,9 +39,7 @@ public sealed class GetDownloadLinkHandler(ItemAccess access, IStorageStore stor
         if (!version.IsSuccess) return version.As<DownloadLink>();
         var (item, v) = version.Value;
         var lifetime = options.Value.DownloadLinkLifetime;
-        var location = await FileVersions.LocationAsync(store, v, ct);
-        var url = await stores.Get(location).GetDownloadUrlAsync(v.BlobKey, item.Name, v.ContentType, query.Inline, lifetime, ct)
-                  ?? tickets.Link(new DownloadTicket(tenant.Required.Id, v.BlobKey, item.Name, v.ContentType, query.Inline, location), lifetime);
+        var url = await FileVersions.LinkAsync(store, stores, tickets, tenant.Required.Id, item, v, query.Inline, lifetime, ct);
         return new DownloadLink(url, caller.Now + lifetime);
     }
 }
@@ -70,6 +68,15 @@ internal static class FileVersions
     /// <summary>The store a version's blob was written to (a blob without a record is from before locations: the local disk).</summary>
     public static async Task<string> LocationAsync(IStorageStore store, FileVersion version, CancellationToken ct) =>
         (await store.BlobsAsync([version.BlobKey], ct)).FirstOrDefault()?.Location ?? "";
+
+    /// <summary>A short-lived URL for a version: presigned by the blob's store, or signed by the module (the local disk).</summary>
+    public static async Task<Uri> LinkAsync(IStorageStore store, IBlobStores stores, IDownloadTickets tickets, string tenantId, Item item,
+        FileVersion version, bool inline, TimeSpan lifetime, CancellationToken ct)
+    {
+        var location = await LocationAsync(store, version, ct);
+        return await stores.Get(location).GetDownloadUrlAsync(version.BlobKey, item.Name, version.ContentType, inline, lifetime, ct)
+               ?? tickets.Link(new DownloadTicket(tenantId, version.BlobKey, item.Name, version.ContentType, inline, location), lifetime);
+    }
 
     /// <summary>A file the caller may read (Read data), and the version asked for (the current one by default).</summary>
     public static async Task<Result<(Item Item, FileVersion Version)>> ReachAsync(ItemAccess access, Guid id, int? number, CancellationToken ct)

@@ -5,6 +5,8 @@ using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.Common;
 using soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.ShareAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate;
 
 namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Config;
@@ -116,5 +118,34 @@ public sealed class UploadSessionConfiguration : IEntityTypeConfiguration<Upload
         upload.Property(u => u.CreatedBy).HasMaxLength(Item.UserIdLength);
         upload.Property(u => u.Version).IsConcurrencyToken();
         upload.HasIndex(u => u.ExpiresAt);
+    }
+}
+
+public sealed class ShareLinkConfiguration : IEntityTypeConfiguration<ShareLink>
+{
+    public void Configure(EntityTypeBuilder<ShareLink> link)
+    {
+        link.ToTable("share_links");
+        link.Property(l => l.Id).ValueGeneratedNever();
+        link.Property(l => l.Token).HasMaxLength(ShareLink.TokenLength);
+        link.Property(l => l.CreatedBy).HasMaxLength(Item.UserIdLength);
+        link.Property(l => l.PasswordHash).HasMaxLength(200);
+        link.Property(l => l.Version).IsConcurrencyToken();
+        link.HasIndex(l => l.Token).IsUnique();
+        link.HasIndex(l => l.ItemId);
+    }
+}
+
+public sealed class StoragePersonConfiguration : IEntityTypeConfiguration<StoragePerson>
+{
+    public void Configure(EntityTypeBuilder<StoragePerson> person)
+    {
+        person.ToTable("people");
+        person.Property(p => p.Id).ValueGeneratedNever();
+        person.Property(p => p.UserId).HasMaxLength(StoragePerson.UserIdLength);
+        person.Property(p => p.Name).HasMaxLength(StoragePerson.NameLength);
+        person.Property(p => p.Email).HasMaxLength(StoragePerson.EmailLength);
+        person.Property(p => p.SearchKey).HasMaxLength(StoragePerson.NameLength + StoragePerson.EmailLength + 1);
+        person.HasIndex(p => new { p.TenantId, p.UserId }).IsUnique();
     }
 }

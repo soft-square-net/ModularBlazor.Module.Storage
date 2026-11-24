@@ -115,7 +115,8 @@ if (mode == "dev")
     const string ClientLocal = "Modules__Settings__client-modules__ClientModules__Local__";
     webApi.WithEnvironment("Modules__Local__storage", Metadata("ModuleOutput"))
         .WithEnvironment(ClientLocal + "WebApi.Modules.Storage.Client", Metadata("ApiClientOutput"))
-        .WithEnvironment(ClientLocal + "Module.Storage", Metadata("UiOutput"));
+        .WithEnvironment(ClientLocal + "Module.Storage", Metadata("UiOutput"))
+        .WithEnvironment(ClientLocal + "Module.Storage.Shares", Metadata("SharesOutput"));
 }
 
 builder.AddProject<Projects.ModularBlazor_BlzWebClient>("blzwebclient", launchProfileName: null)

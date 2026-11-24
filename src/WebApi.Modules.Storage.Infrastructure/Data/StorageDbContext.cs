@@ -5,6 +5,8 @@ using soft.square.net.WebApi.Data;
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.ShareAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate;
 
 namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data;
@@ -22,6 +24,8 @@ public sealed class StorageDbContext(DbContextOptions<StorageDbContext> options,
     public DbSet<StorageGroup> Groups => Set<StorageGroup>();
     public DbSet<Blob> Blobs => Set<Blob>();
     public DbSet<UploadSession> Uploads => Set<UploadSession>();
+    public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
+    public DbSet<StoragePerson> People => Set<StoragePerson>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {

@@ -31,3 +31,24 @@
 .st-versions th { font-weight: 600; color: var(--mud-palette-text-secondary); }
 .st-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .st-current { margin-inline-start: 6px; }
+
+/* Share dialog. */
+.st-share section { margin-block: 12px 4px; }
+.st-share h3 { margin: 0 0 6px; font-size: .95rem; font-weight: 600; }
+.st-row { display: flex; gap: 8px; align-items: center; }
+.st-wrap { flex-wrap: wrap; align-items: flex-end; }
+.st-grow { flex: 1 1 auto; min-width: 0; }
+.st-small { font-size: .8rem; margin: 4px 0; }
+.st-input { font: inherit; padding: 5px 8px; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;
+  background: var(--mud-palette-surface); color: inherit; }
+.st-narrow { inline-size: 6em; }
+.st-field { display: flex; flex-direction: column; gap: 2px; font-size: .8rem; color: var(--mud-palette-text-secondary); }
+.st-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.st-found { border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; padding: 4px; max-block-size: 180px; overflow: auto; }
+.st-pick { all: unset; display: block; inline-size: 100%; padding: 4px 6px; border-radius: 4px; cursor: pointer; box-sizing: border-box; }
+.st-pick:hover, .st-pick:focus-visible { background: var(--mud-palette-action-default-hover); }
+.st-link { margin-block: 6px; }
+.st-link--off input { text-decoration: line-through; opacity: .6; }
+.st-check { display: flex; gap: 8px; align-items: flex-start; }
+.st-btn--primary { background: var(--mud-palette-primary); border-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text, #fff); }
+.st-btn--primary:hover:not(:disabled) { filter: brightness(.92); background: var(--mud-palette-primary); }

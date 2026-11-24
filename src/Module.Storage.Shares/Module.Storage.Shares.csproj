@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
+
+  <!--
+    Shared links: the anonymous client module of the Storage module. It opens "anyone with the link" share links
+    (/s/{tenant}/{token}) without signing in: a shared file to download, or a shared folder to browse read-only and
+    download from. A module of its own because sign-in is required per module (RequiresAuth), and Files requires it.
+
+    Shipped as soft.square.net.Module.Storage.Shares.dll alone; it uses the API client module (Dependencies), referenced
+    here to compile, never copied (Private=false), through the gateway's client without a token ("WebApi.Public").
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" Version="10.0.*" PrivateAssets="all" />
+    <ProjectReference Include="..\WebApi.Modules.Storage.Client\WebApi.Modules.Storage.Client.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="i18n/**" />
+    <None Remove="i18n/**" />
+    <EmbeddedResource Include="i18n/*.json" LogicalName="i18n/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

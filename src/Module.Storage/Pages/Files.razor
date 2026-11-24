@@ -60,6 +60,123 @@
   </div>
 }
 
+@if (_shareOf is { } shared)
+{
+  <div class="st-scrim" @onclick="CloseShare"></div>
+  <div class="st-modal st-modal--wide st-share" role="dialog" aria-modal="true" aria-labelledby="st-share-title">
+    <h2 id="st-share-title" class="mud-typography mud-typography-h6">@L["Share \"{0}\"", shared.Name]</h2>
+    @if (_sharing is not { } sharing)
+    {
+      <p class="st-muted">@L["Loading…"]</p>
+    }
+    else
+    {
+      <section>
+        <h3>@L["People"]</h3>
+        <div class="st-row">
+          <input class="st-input st-grow" type="search" placeholder="@L["Add people by name or email"]" value="@_peopleSearch"
+                 @oninput="SearchPeopleAsync" disabled="@_shareBusy" aria-label="@L["Add people by name or email"]" />
+          <select class="st-input" @bind="_newAccess" aria-label="@L["Access"]">
+            <option value="@ShareAccess.View">@L["Can view"]</option>
+            @if (sharing.CanEdit)
+            {
+              <option value="@ShareAccess.Edit">@L["Can edit"]</option>
+            }
+          </select>
+        </div>
+        @if (_peopleFound.Count > 0)
+        {
+          <ul class="st-list st-found">
+            @foreach (var person in _peopleFound)
+            {
+              <li><button type="button" class="st-pick" @onclick="() => ShareWithAsync(person)">
+                <strong>@person.Name</strong> <span class="st-muted">@person.Email</span></button></li>
+            }
+          </ul>
+        }
+        else if (_peopleSearch.Trim().Length >= 2)
+        {
+          <p class="st-muted st-small">@L["Nobody found. People appear here after they have opened Files once."]</p>
+        }
+        @if (sharing.People.Count == 0)
+        {
+          <p class="st-muted st-small">@L["Not shared with anyone by name."]</p>
+        }
+        else
+        {
+          <ul class="st-list">
+            @foreach (var person in sharing.People)
+            {
+              <li class="st-row">
+                <span class="st-grow"><strong>@person.Name</strong> <span class="st-muted">@person.Email</span></span>
+                <select class="st-input" value="@person.Access" @onchange="e => ChangeAccessAsync(person, e)" disabled="@_shareBusy" aria-label="@L["Access"]">
+                  <option value="@ShareAccess.View">@L["Can view"]</option>
+                  @if (sharing.CanEdit || person.Access == ShareAccess.Edit)
+                  {
+                    <option value="@ShareAccess.Edit">@L["Can edit"]</option>
+                  }
+                  @if (person.Access == ShareAccess.Custom)
+                  {
+                    <option value="@ShareAccess.Custom" disabled>@L["Custom"]</option>
+                  }
+                </select>
+                <button type="button" class="st-btn" @onclick="() => StopSharingAsync(person)" disabled="@_shareBusy">@L["Remove"]</button>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section>
+        <h3>@L["Links"]</h3>
+        <p class="st-muted st-small">@(sharing.Kind == ItemKind.Folder
+            ? L["Anyone with a link can browse this folder and download its files, without signing in."]
+            : L["Anyone with a link can download this file, without signing in."])</p>
+        @foreach (var link in sharing.Links)
+        {
+          <div class="st-link @(link.Active ? null : "st-link--off")">
+            <div class="st-row">
+              <input class="st-input st-grow" readonly value="@LinkUrl(link)" aria-label="@L["Link"]" />
+              <button type="button" class="st-btn" @onclick="() => CopyAsync(LinkUrl(link))">@L["Copy"]</button>
+              <button type="button" class="st-btn" @onclick="() => DeleteLinkAsync(link)" disabled="@_shareBusy">@L["Remove"]</button>
+            </div>
+            <p class="st-muted st-small">@LinkSummary(link)</p>
+          </div>
+        }
+        <div class="st-row st-wrap">
+          <label class="st-field">@L["Expires"] <input class="st-input" type="date" @bind="_linkExpires" /></label>
+          <label class="st-field">@L["Password"] <input class="st-input" type="password" autocomplete="new-password" @bind="_linkPassword" /></label>
+          <label class="st-field">@L["Download limit"] <input class="st-input st-narrow" type="number" min="1" @bind="_linkLimit" /></label>
+          <button type="button" class="st-btn st-btn--primary" @onclick="CreateLinkAsync" disabled="@_shareBusy">@L["Create link"]</button>
+        </div>
+      </section>
+
+      @if (sharing.CanChangePublic || sharing.IsPublic || sharing.PublicFolderId is not null)
+      {
+        <section>
+          <h3>@L["Public"]</h3>
+          @if (sharing.Kind == ItemKind.Folder)
+          {
+            <label class="st-check">
+              <input type="checkbox" checked="@sharing.IsPublic" disabled="@(_shareBusy || !sharing.CanChangePublic)" @onchange="SetPublicAsync" />
+              @L["Public folder: anyone can open the files in it (and below it) without signing in, for example in published pages."]
+            </label>
+          }
+          else if (sharing.PublicFolderId is not null)
+          {
+            <p class="st-muted st-small">@L["This file is in a public folder. Its public address:"]</p>
+            <div class="st-row">
+              <input class="st-input st-grow" readonly value="@PublicUrl()" aria-label="@L["Public address"]" />
+              <button type="button" class="st-btn" @onclick="() => CopyAsync(PublicUrl())">@L["Copy"]</button>
+            </div>
+          }
+        </section>
+      }
+    }
+    <div class="st-modal__buttons"><button type="button" class="st-btn" @onclick="CloseShare">@L["Close"]</button></div>
+  </div>
+}
+
 @if (_confirm is { } confirm)
 {
   <div class="st-scrim st-scrim--top" @onclick="() => Answer(false)"></div>

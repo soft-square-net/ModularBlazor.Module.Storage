@@ -30,7 +30,10 @@ public sealed class HandlerFixture
         Scopes.UserId.Returns(me);
         Scopes.HasPermissionAsync(StoragePermissions.Admin, Arg.Any<CancellationToken>()).Returns(admin);
         Groups.ListAsync(Arg.Any<ISpecification<StorageGroup>>(), Arg.Any<CancellationToken>()).Returns([]);
-        Tenant.Tenant.Returns(new TenantInfo("acme", "Acme", TenantStatus.Active, [], "", ""));
+        var acme = new TenantInfo("acme", "Acme", TenantStatus.Active, [], "", "");
+        Tenant.Tenant.Returns(acme);
+        Tenant.Required.Returns(acme); // default interface members are substituted too
+        Tenant.TenantId.Returns(acme.Id);
         Caller = new StorageCaller(Scopes, Groups, Clock);
         Access = new ItemAccess(Store, Caller);
         Stores.Get(Arg.Any<string>()).Returns(Blobs);

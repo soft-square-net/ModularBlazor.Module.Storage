@@ -940,6 +940,286 @@
         }
       }
     },
+    "/api/storage/people": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Tenant members who have used Storage, whose name or email contains the text (2 characters or more).",
+        "operationId": "Storage_SearchPeople",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/shared-with-me": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Items shared with you by name that you can still open, with their owner and path.",
+        "operationId": "Storage_GetSharedWithMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SharedItemDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/sharing": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "The Share dialog (Share): who the item is shared with, its links, and whether it is public.",
+        "operationId": "Storage_GetSharing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/sharing/people": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Share with people to view or to edit (Share; edit also needs Modify yourself).",
+        "operationId": "Storage_ShareWithPeople",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareWithPeopleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/sharing/people/{userId}": {
+      "delete": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Stop sharing with someone: removes their allow entries on the item (Share).",
+        "operationId": "Storage_StopSharing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/sharing/public": {
+      "put": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Make a folder public (anyone can read its files without signing in) or private (Share and Change permissions).",
+        "operationId": "Storage_SetPublic",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPublicRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharingDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/sharing/links": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "A new \"anyone with the link\" link: optional expiry, password and download limit (Share).",
+        "operationId": "Storage_CreateShareLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/sharing/links/{linkId}": {
+      "delete": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Remove a link (its creator, Share on the item, or a Storage admin); it stops working at once.",
+        "operationId": "Storage_DeleteShareLink",
+        "parameters": [
+          {
+            "name": "linkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/storage/groups/{id}": {
       "put": {
         "tags": [
@@ -1028,6 +1308,122 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SweepResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/shares/{tenant}/{token}": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Open a share link (anonymous): the shared file, or a folder of the shared tree. 401 when it needs a password (header X-Share-Password).",
+        "operationId": "Storage_OpenShare",
+        "parameters": [
+          {
+            "name": "tenant",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "folderId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Share-Password",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/shares/{tenant}/{token}/files/{fileId}/link": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "A short-lived URL for a file the link shares (anonymous); counts as a download.",
+        "operationId": "Storage_OpenSharedFile",
+        "parameters": [
+          {
+            "name": "tenant",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "inline",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "X-Share-Password",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadLink"
                 }
               }
             }
@@ -1213,6 +1609,36 @@
           },
           "numberIfTaken": {
             "type": "boolean"
+          }
+        }
+      },
+      "CreateShareLinkRequest": {
+        "required": [
+          "expiresAt",
+          "password",
+          "maxDownloads"
+        ],
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "password": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "maxDownloads": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -1584,6 +2010,28 @@
         ],
         "type": "string"
       },
+      "PersonDto": {
+        "required": [
+          "userId",
+          "name",
+          "email"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "PrincipalKind": {
         "enum": [
           "User",
@@ -1732,6 +2180,287 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "SetPublicRequest": {
+        "required": [
+          "public"
+        ],
+        "type": "object",
+        "properties": {
+          "public": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ShareAccess": {
+        "enum": [
+          "View",
+          "Edit",
+          "Custom"
+        ],
+        "type": "string"
+      },
+      "SharedEntryDto": {
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "size",
+          "contentType",
+          "modifiedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contentType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SharedItemDto": {
+        "required": [
+          "item",
+          "ownerName",
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/ItemDto"
+          },
+          "ownerName": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Crumb"
+            }
+          }
+        }
+      },
+      "SharedPersonDto": {
+        "required": [
+          "userId",
+          "name",
+          "email",
+          "access"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "access": {
+            "$ref": "#/components/schemas/ShareAccess"
+          }
+        }
+      },
+      "SharedView": {
+        "required": [
+          "shared",
+          "expiresAt",
+          "folder",
+          "path",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "shared": {
+            "$ref": "#/components/schemas/SharedEntryDto"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "folder": {
+            "$ref": "#/components/schemas/SharedEntryDto"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharedEntryDto"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharedEntryDto"
+            }
+          }
+        }
+      },
+      "ShareLinkDto": {
+        "required": [
+          "id",
+          "token",
+          "itemId",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "hasPassword",
+          "maxDownloads",
+          "downloads",
+          "active"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "hasPassword": {
+            "type": "boolean"
+          },
+          "maxDownloads": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "downloads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ShareWithPeopleRequest": {
+        "required": [
+          "userIds",
+          "access"
+        ],
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "access": {
+            "$ref": "#/components/schemas/ShareAccess"
+          }
+        }
+      },
+      "SharingDto": {
+        "required": [
+          "itemId",
+          "kind",
+          "name",
+          "tenantId",
+          "version",
+          "canEdit",
+          "canChangePublic",
+          "isPublic",
+          "publicFolderId",
+          "people",
+          "links"
+        ],
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "canChangePublic": {
+            "type": "boolean"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "publicFolderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharedPersonDto"
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShareLinkDto"
+            }
           }
         }
       },

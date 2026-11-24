@@ -70,6 +70,8 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
 
     public string OwnerId { get; private set; } = "";
     public bool InheritsAccess { get; private set; } = true;
+    /// <summary>Folders: anyone may read the files below it, without signing in (published media), at /public/{tenant}/{id}/{name}.</summary>
+    public bool IsPublic { get; private set; }
     /// <summary>The item's own (explicit) entries; inherited ones are computed from the folders above.</summary>
     public IReadOnlyList<AccessEntry> Entries => _entries;
 
@@ -284,6 +286,17 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         _entries.Clear();
         _entries.AddRange(list);
         InheritsAccess = inheritsAccess;
+        Touch(by, now);
+    }
+
+    /// <summary>Makes a folder public (its files readable by anyone without signing in) or private again.</summary>
+    public void SetPublic(bool isPublic, string by, DateTimeOffset now)
+    {
+        EnsureNotDeleted();
+        if (!IsFolder) throw new DomainException("Only folders can be public; a file is public when a folder above it is.");
+        if (Role is FolderRole.Homes) throw new DomainException($"'{Name}' cannot be public.");
+        if (IsPublic == isPublic) return;
+        IsPublic = isPublic;
         Touch(by, now);
     }
 

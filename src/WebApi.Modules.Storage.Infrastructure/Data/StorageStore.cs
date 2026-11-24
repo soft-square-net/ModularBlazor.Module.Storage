@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.Common;
 using soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.ShareAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.AccessControl;
 using soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Items;
 
@@ -125,6 +128,27 @@ internal sealed class StorageStore(StorageDbContext db) : IStorageStore
     public void Add<T>(T entity) where T : class => db.Add(entity);
 
     public void Remove<T>(T entity) where T : class => db.Remove(entity);
+
+    public async Task<IReadOnlyList<Item>> SharedWithAsync(string userId, int take, CancellationToken ct) =>
+        await db.Items.Where(i => i.DeletedAt == null && i.Entries.Any(e =>
+                e.PrincipalKind == PrincipalKind.User && e.PrincipalId == userId && e.Type == AceType.Allow))
+            .OrderByDescending(i => i.ModifiedAt).Take(take).ToListAsync(ct);
+
+    public Task<StoragePerson?> PersonAsync(string userId, CancellationToken ct) =>
+        db.People.FirstOrDefaultAsync(p => p.UserId == userId, ct);
+
+    public async Task<IReadOnlyList<StoragePerson>> SearchPeopleAsync(string search, int take, CancellationToken ct) =>
+        await db.People.Where(p => p.SearchKey.Contains(search)).OrderBy(p => p.Name).Take(take).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<StoragePerson>> PeopleAsync(IReadOnlyCollection<string> userIds, CancellationToken ct) =>
+        userIds.Count == 0 ? [] : await db.People.Where(p => userIds.Contains(p.UserId)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ShareLink>> LinksOfAsync(Guid itemId, CancellationToken ct) =>
+        await db.ShareLinks.Where(l => l.ItemId == itemId).OrderBy(l => l.CreatedAt).ToListAsync(ct);
+
+    public Task<ShareLink?> LinkAsync(Guid id, CancellationToken ct) => db.ShareLinks.FirstOrDefaultAsync(l => l.Id == id, ct);
+
+    public Task<ShareLink?> LinkByTokenAsync(string token, CancellationToken ct) => db.ShareLinks.FirstOrDefaultAsync(l => l.Token == token, ct);
 
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 
