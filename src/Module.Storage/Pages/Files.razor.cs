@@ -63,7 +63,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
             var runtime = await MudTail.GetAsync();
             if (runtime is null)
             {
-                _error = L["The explorer needs the Default layout (Layouts.Default), which is not active."];
+                _error = L["The explorer needs the MudTail runtime (UI.MudTail), which is not active."];
                 return;
             }
 

@@ -1,4 +1,4 @@
-/* Shared links (anonymous): the page that opens a share link. Colours come from Layouts.Default's --mud-palette-*. */
+/* Shared links (anonymous): the page that opens a share link. Colours come from UI.MudTail's --mud-palette-*. */
 .sl-page { max-inline-size: 960px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 12px; }
 .sl-title { margin: 0; font-size: 1.4rem; font-weight: 600; overflow-wrap: anywhere; }
 .sl-head { display: flex; flex-direction: column; gap: 2px; }

@@ -10,7 +10,7 @@
   "This command is not available yet.": "هذا الأمر غير متاح بعد.",
   "Folders cannot be downloaded yet: select the files in them.": "لا يمكن تنزيل المجلدات بعد: حدّد الملفات التي بداخلها.",
   "Uploading {0} ({1} of {2})": "جارٍ رفع {0} ({1} من {2})",
-  "The explorer needs the Default layout (Layouts.Default), which is not active.": "يحتاج المستكشف إلى التخطيط الافتراضي (Layouts.Default)، وهو غير مفعّل.",
+  "The explorer needs the MudTail runtime (UI.MudTail), which is not active.": "يحتاج المستكشف إلى بيئة تشغيل MudTail (UI.MudTail)، وهي غير مفعّلة.",
   "400: no tenant. Files belong to a tenant: sign in to one (your organisation) to use them.": "400: لا توجد جهة. الملفات تخص جهة: سجّل الدخول إلى جهتك (مؤسستك) لاستخدامها.",
   "401: the gateway did not accept the access token. Sign in again.": "401: لم تقبل البوابة رمز الوصول. سجّل الدخول مرة أخرى.",
   "you do not have access to this.": "ليست لديك صلاحية الوصول إلى هذا.",
