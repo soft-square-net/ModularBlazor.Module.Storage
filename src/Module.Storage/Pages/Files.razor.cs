@@ -32,6 +32,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
 
     private ElementReference _host;
     private IJSObjectReference? _explorer;
+    // The explorer asks its first questions (places, the start folder) while create() runs, before the handle is here.
+    private readonly TaskCompletionSource<IJSObjectReference> _created = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private DotNetObjectReference<Files>? _self;
     private Roots? _roots;
     private bool _loading = true;
@@ -64,6 +66,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 renameInPlace = true,
             };
             _explorer = await runtime.InvokeAsync<IJSObjectReference>("create", "explorer", _host, options, _self);
+            _created.TrySetResult(_explorer);
         }
         catch (AccessTokenNotAvailableException ex)
         {
@@ -75,6 +78,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
         }
         finally
         {
+            _created.TrySetCanceled();
             _loading = false;
             StateHasChanged();
         }
@@ -379,7 +383,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
     private object ToFolder(ItemDto folder) => new
     {
         id = folder.Id.ToString(),
-        name = folder.Role == FolderRole.Root ? L["Files"].Value : folder.Name,
+        name = NameOf(folder),
         kind = "folder",
         deny = FolderDeny(folder.Rights),
     };
@@ -387,7 +391,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
     private object ToItem(ItemDto item, int folderRights) => new
     {
         id = item.Id.ToString(),
-        name = item.Role == FolderRole.Root ? L["Files"].Value : item.Name,
+        name = NameOf(item),
         kind = item.Kind == ItemKind.Folder ? "folder" : "file",
         modified = item.ModifiedAt,
         created = item.CreatedAt,
@@ -398,11 +402,17 @@ public partial class Files : ComponentBase, IAsyncDisposable
         deny = ItemDeny(item, folderRights),
     };
 
-    private string CrumbName(Crumb crumb) => crumb.Role switch
+    private string NameOf(ItemDto item) => DisplayName(item.Id, item.Role, item.Name);
+
+    private string CrumbName(Crumb crumb) => DisplayName(crumb.Id, crumb.Role, crumb.Name);
+
+    /// <summary>The top folders in the user's language; the user's own home folder (named after the user id) is "My files".</summary>
+    private string DisplayName(Guid id, FolderRole role, string name) => role switch
     {
         FolderRole.Root => L["Files"].Value,
         FolderRole.Homes => L["Users"].Value,
-        _ => crumb.Name,
+        FolderRole.Home when id == _roots?.Home.Id => L["My files"].Value,
+        _ => name,
     };
 
     /// <summary>What the rights refuse on an item. Renaming, moving and deleting need Delete on it or DeleteChildren
@@ -478,8 +488,13 @@ public partial class Files : ComponentBase, IAsyncDisposable
 
     private async Task CallAsync(string method, params object?[] args)
     {
-        if (_explorer is null || _disposed) return;
-        try { await _explorer.InvokeVoidAsync(method, args); }
+        if (_disposed) return;
+        try
+        {
+            var explorer = await _created.Task;
+            if (!_disposed) await explorer.InvokeVoidAsync(method, args);
+        }
+        catch (TaskCanceledException) { } // the explorer was never made
         catch (JSDisconnectedException) { }
         catch (ObjectDisposedException) { }
     }
