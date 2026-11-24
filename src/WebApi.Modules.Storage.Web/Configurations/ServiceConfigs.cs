@@ -30,6 +30,7 @@ public static class ServiceConfigs
         services.AddScoped<ItemAccess>();
         services.AddScoped<Purger>();
         services.AddScoped<PeopleBook>();
+        services.AddScoped<AclReader>();
         services.AddScoped<Sharer>();
         services.AddScoped<ICallerProfile, CallerProfile>();
         services.AddScoped<ThumbnailLinks>();

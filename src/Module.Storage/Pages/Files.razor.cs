@@ -52,6 +52,11 @@ public partial class Files : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_editorPending)
+        {
+            _editorPending = false;
+            await CreateEditorAsync();
+        }
         if (!firstRender) return;
         try
         {
@@ -110,6 +115,9 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 break;
             case "pinned":
                 _ = SavePinnedAsync(payload.GetRawText());
+                break;
+            case "change" or "error":
+                EditorEvent(name, payload.Clone()); // the image editor's
                 break;
         }
         return Task.CompletedTask;
@@ -305,6 +313,13 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 return null;
             case "share":
                 if (items is [var one]) await ShowShareAsync(one);
+                return null;
+            case "security":
+                if (items is [var only]) await ShowSecurityAsync(only);
+                else if (items.Count == 0 && folder is not null) await ShowSecurityAsync(folder);
+                return null;
+            case "edit":
+                if (items is [{ IsFolder: false } image]) await OpenEditorAsync(image);
                 return null;
             default:
                 await MudTail.ToastAsync(L["This command is not available yet."], "info");
@@ -631,8 +646,13 @@ public partial class Files : ComponentBase, IAsyncDisposable
     /// on its folder; reading a file needs ListFolder (ReadData); top folders and home folders stay where they are.</summary>
     private static string[] ItemDeny(ItemDto item, int folderRights)
     {
-        var deny = new List<string> { "edit", "security" }; // later phases
+        var deny = new List<string>();
         if (!Has(item.Rights, Rights.Share)) deny.Add("share");
+        if (!Has(item.Rights, Rights.ReadPermissions)) deny.Add("security");
+        // Editing saves a new version: an image the browser can write back, clean, and the right to write the file.
+        var editable = item.Kind == ItemKind.File && item.Scan == ScanStatus.Clean && item.ContentType is { } type && EditableTypes.ContainsKey(type)
+            && Has(item.Rights, Rights.ListFolder) && Has(item.Rights, Rights.CreateFiles);
+        if (!editable) deny.Add("edit");
         deny.AddRange(BinOnly);
         if (item.Kind == ItemKind.Folder) deny.Add("versions");
         var removable = item.Role == FolderRole.Normal && (Has(item.Rights, Rights.Delete) || Has(folderRights, Rights.DeleteChildren));
@@ -648,6 +668,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
     private static string[] FolderDeny(int rights)
     {
         var deny = new List<string>(BinOnly);
+        if (!Has(rights, Rights.ReadPermissions)) deny.Add("security");
         if (!Has(rights, Rights.CreateFolders)) deny.Add("newFolder");
         if (!Has(rights, Rights.CreateFiles)) deny.Add("upload");
         if (!Has(rights, Rights.CreateFiles) && !Has(rights, Rights.CreateFolders)) deny.AddRange(["paste", "moveTo", "copyTo"]);
@@ -665,6 +686,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
         CreateFolders = 0x4,
         DeleteChildren = 0x40,
         Delete = 0x10000,
+        ReadPermissions = 0x20000,
         Share = 0x1000000,
     }
 
@@ -755,6 +777,15 @@ public partial class Files : ComponentBase, IAsyncDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        if (_editor is not null)
+        {
+            try
+            {
+                await _editor.InvokeVoidAsync("dispose");
+                await _editor.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
         if (_explorer is not null)
         {
             try

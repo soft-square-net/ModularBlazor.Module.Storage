@@ -1,4 +1,6 @@
+using soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Items;
+using soft.square.net.WebApi.Modules.Storage.UseCases.Sharing;
 
 namespace soft.square.net.WebApi.Modules.Storage.UseCases.Access;
 
@@ -17,6 +19,9 @@ public sealed record AceDto(
     Guid? InheritedFromId,
     string? InheritedFromName)
 {
+    /// <summary>The user's or group's name for display (read only: ignored when an access list is saved).</summary>
+    public string? PrincipalName { get; init; }
+
     public static AceDto Explicit(AccessEntry e) =>
         new(e.PrincipalKind, e.PrincipalId, e.PrincipalScope, e.Type, (int)e.Rights, (int)e.Inheritance, false, null, null);
 
@@ -29,16 +34,20 @@ public sealed record AceDto(
 }
 
 /// <summary>An item's security: owner, whether it inherits, its own entries, then the inherited ones (nearest folder first).</summary>
-public sealed record AclDto(Guid ItemId, ItemKind Kind, string OwnerId, bool InheritsAccess, int Version, IReadOnlyList<AceDto> Entries);
+public sealed record AclDto(Guid ItemId, ItemKind Kind, string OwnerId, bool InheritsAccess, int Version, IReadOnlyList<AceDto> Entries)
+{
+    /// <summary>The owner's name, from Storage's people (the id when they have not used Files yet).</summary>
+    public string? OwnerName { get; init; }
+}
 
 public sealed record GetAclQuery(Guid Id) : IQuery<Result<AclDto>>;
 
-public sealed class GetAclHandler(ItemAccess access) : IQueryHandler<GetAclQuery, Result<AclDto>>
+public sealed class GetAclHandler(ItemAccess access, AclReader reader) : IQueryHandler<GetAclQuery, Result<AclDto>>
 {
     public async ValueTask<Result<AclDto>> Handle(GetAclQuery query, CancellationToken ct)
     {
         var reached = await access.ReachAsync(query.Id, StorageRights.ReadPermissions, ct);
-        return reached.IsSuccess ? Acl.Of(reached.Value.Chain) : reached.As<AclDto>();
+        return reached.IsSuccess ? await reader.ReadAsync(reached.Value.Chain, ct) : reached.As<AclDto>();
     }
 }
 
@@ -50,7 +59,7 @@ public sealed class GetAclHandler(ItemAccess access) : IQueryHandler<GetAclQuery
 /// </summary>
 public sealed record SetAclCommand(Guid Id, bool InheritsAccess, IReadOnlyList<AceDto> Entries, bool ConvertInherited, int Version) : ICommand<Result<AclDto>>;
 
-public sealed class SetAclHandler(IStorageStore store, ItemAccess access, StorageCaller caller) : ICommandHandler<SetAclCommand, Result<AclDto>>
+public sealed class SetAclHandler(IStorageStore store, ItemAccess access, StorageCaller caller, AclReader reader) : ICommandHandler<SetAclCommand, Result<AclDto>>
 {
     public async ValueTask<Result<AclDto>> Handle(SetAclCommand command, CancellationToken ct)
     {
@@ -64,7 +73,7 @@ public sealed class SetAclHandler(IStorageStore store, ItemAccess access, Storag
             entries.AddRange(AccessEvaluator.InheritedAsExplicit(reached.Value.Chain));
         item.SetAccess(command.InheritsAccess, entries, caller.UserId, caller.Now);
         await store.SaveAsync(ct);
-        return Acl.Of(reached.Value.Chain);
+        return await reader.ReadAsync(reached.Value.Chain, ct);
     }
 }
 
@@ -73,7 +82,7 @@ public sealed class SetAclHandler(IStorageStore store, ItemAccess access, Storag
 /// </summary>
 public sealed record SetOwnerCommand(Guid Id, string? OwnerId) : ICommand<Result<AclDto>>;
 
-public sealed class SetOwnerHandler(IStorageStore store, ItemAccess access, StorageCaller caller) : ICommandHandler<SetOwnerCommand, Result<AclDto>>
+public sealed class SetOwnerHandler(IStorageStore store, ItemAccess access, StorageCaller caller, AclReader reader) : ICommandHandler<SetOwnerCommand, Result<AclDto>>
 {
     public async ValueTask<Result<AclDto>> Handle(SetOwnerCommand command, CancellationToken ct)
     {
@@ -84,7 +93,7 @@ public sealed class SetOwnerHandler(IStorageStore store, ItemAccess access, Stor
         if (!self && !await caller.IsAdminAsync(ct)) return Result<AclDto>.Forbidden("Only Storage administrators can give ownership to someone else.");
         reached.Value.Item.SetOwner(owner, caller.UserId, caller.Now);
         await store.SaveAsync(ct);
-        return Acl.Of(reached.Value.Chain);
+        return await reader.ReadAsync(reached.Value.Chain, ct);
     }
 }
 
@@ -115,6 +124,41 @@ public sealed class GetEffectiveAccessHandler(ItemAccess access, StorageCaller c
             rights = AccessEvaluator.Evaluate(reached.Value.Chain, matcher);
         }
         return new EffectiveAccessDto(userId, (int)rights, isAdmin, canUse);
+    }
+}
+
+/// <summary>
+/// An item's access list with the names the Security dialog shows: people from Storage's list, group names, and a home
+/// folder (named by its owner's id) as its owner's name.
+/// </summary>
+public sealed class AclReader(PeopleBook people, IReadRepository<StorageGroup> groups)
+{
+    public async Task<AclDto> ReadAsync(IReadOnlyList<Item> chain, CancellationToken ct)
+    {
+        var acl = Acl.Of(chain);
+        var homes = chain.Where(i => i.Role == FolderRole.Home).ToDictionary(i => i.Id, i => i.OwnerId);
+        var users = acl.Entries.Where(e => e.PrincipalKind == PrincipalKind.User).Select(e => e.PrincipalId!)
+            .Append(acl.OwnerId).Concat(homes.Values).ToArray();
+        var names = await people.ResolveAsync(users, ct);
+        var groupNames = acl.Entries.Any(e => e.PrincipalKind == PrincipalKind.Group)
+            ? (await groups.ListAsync(ct)).ToDictionary(g => g.Id.ToString("D"), g => g.Name, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>();
+        return acl with
+        {
+            OwnerName = names.GetValueOrDefault(acl.OwnerId)?.Name,
+            Entries = acl.Entries.Select(e => e with
+            {
+                InheritedFromName = e.InheritedFromId is { } from && homes.TryGetValue(from, out var homeOwner)
+                    ? names.GetValueOrDefault(homeOwner)?.Name ?? e.InheritedFromName
+                    : e.InheritedFromName,
+                PrincipalName = e.PrincipalKind switch
+                {
+                    PrincipalKind.User => names.GetValueOrDefault(e.PrincipalId!)?.Name,
+                    PrincipalKind.Group => groupNames.GetValueOrDefault(e.PrincipalId!),
+                    _ => null,
+                },
+            }).ToArray(),
+        };
     }
 }
 

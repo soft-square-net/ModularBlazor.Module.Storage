@@ -10,8 +10,8 @@ as the bundle `storage`.
 > the recycle bin, previous versions, the sweeper (purging old deletions, unused blobs and abandoned uploads) and sharing
 > (with people, by links, public folders), and the integration points (the file and folder pickers for other modules,
 > the change feed for Elsa, thumbnails, virus scanning with ClamAV) are in.
-> The Explorer needs MudTail's explorer component, on the platform's `feat/mudtail-explorer` branch. The Security
-> dialog and the image editor are not built yet. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
+> The Security dialog and the image editor are in too. The Explorer and the editor need MudTail's components, on the
+> platform's `feat/mudtail-explorer` branch. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
 
 ## Layout
 
@@ -96,7 +96,7 @@ Under `/api/storage`, tenant-bound (header `X-Tenant`, the host name or the toke
 | `GET /items/{id}/content?version=` | Download (ranges supported) |
 | `GET /items/{id}/link?inline=&version=` | A link valid for `Storage:DownloadLinkLifetime`: presigned by S3, or the module's anonymous `GET /links/{token}` |
 | `POST /uploads`, `PUT /uploads/{id}/chunks?offset=`, `GET /uploads/{id}`, `POST /uploads/{id}/complete`, `DELETE /uploads/{id}` | Resumable upload; on a name conflict: `Fail`, `Replace` (new version) or `KeepBoth` |
-| `GET`/`PUT /items/{id}/acl`, `PUT /items/{id}/owner` | The access list (with inherited entries and where they come from), the owner |
+| `GET`/`PUT /items/{id}/acl`, `PUT /items/{id}/owner` | The access list (with inherited entries and where they come from, and names for people, groups, the owner and home folders), the owner |
 | `GET /items/{id}/effective-access?userId=` | The rights a user has on an item, and whether they may use Storage at all |
 | `POST /items/delete` with `permanent: true` | Delete without the recycle bin (needs the same rights) |
 | `GET /recycle-bin` | What the caller deleted (everything, for `storage.admin`): the item, where it was, when, by whom |
@@ -249,7 +249,22 @@ the commands. Uploads go chunk by chunk (the chunk size the API sets; each chunk
 gets a number (`KeepBoth`), and a picked folder keeps its structure. The rights the API returns become the explorer's
 deny lists, so refused commands are greyed out: renaming, moving and deleting need `Delete` on the item or
 `DeleteChildren` on its folder; New folder needs `CreateFolders`, uploads `CreateFiles`. Search filters the open
-folder. Pinned folders (Quick access) are kept in the browser. Security and Edit are disabled until their phases.
+folder. Pinned folders (Quick access) are kept in the browser.
+
+**Security** (a file's or folder's "Show more options" menu, or the command bar for the open folder; needs Read
+permissions, and Change permissions to change anything) is the Windows dialog: *Permissions* lists each user, group,
+"Everyone", permission holders and CREATOR OWNER with the presets (Full control, Modify, Read & execute, Read, Write,
+Share) to allow or deny; inherited ones are greyed. *Advanced* shows the owner (take ownership, or give it: Storage
+admins), every entry with where it is inherited from and what it applies to (this folder only, subfolders and files,
+files only, ... and "only items directly in this folder"), lets you add or edit entries with the individual NTFS rights,
+and disables inheritance (converting the inherited entries, or removing them). Changes are sent on Apply / OK with the
+version that was read, so a concurrent change is refused rather than overwritten. *Effective access* shows what one
+person may do with the item through all their entries, groups and grants.
+
+**Edit** (an image's context menu: JPEG, PNG or WebP, clean, for those who may write the file) opens MudTail's image
+editor (crop, rotate, straighten, adjustments, filters, drawing and text). *Save* stores the result as a new version
+of the same file (the old one stays in Previous versions; links and pickers keep working), *Save as a copy* as a new
+file next to it. Both are ordinary uploads, so quotas and the virus scan apply; the thumbnail is remade.
 
 **Share** (a file's or folder's context menu, or the command bar, for those with the `Share` right) opens the Share
 dialog: add people by name or email with view or edit access, change or remove it; create links (each is copied when

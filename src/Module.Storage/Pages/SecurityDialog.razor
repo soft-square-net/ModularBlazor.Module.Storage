@@ -1,0 +1,337 @@
+@* The Security dialog (see SecurityDialog.razor.cs). Shown by Files for the "security" command. *@
+
+<div class="st-scrim" @onclick="CancelAsync"></div>
+<div class="st-modal st-modal--wide st-security" role="dialog" aria-modal="true" aria-labelledby="st-security-title">
+  <h2 id="st-security-title" class="mud-typography mud-typography-h6">@L["Security of \"{0}\"", Name]</h2>
+
+  <div class="st-tabs" role="tablist">
+    <button type="button" role="tab" class="st-tab @(_tab == Tab.Permissions ? "is-on" : null)" aria-selected="@(_tab == Tab.Permissions)" @onclick="() => _tab = Tab.Permissions">@L["Permissions"]</button>
+    <button type="button" role="tab" class="st-tab @(_tab == Tab.Advanced ? "is-on" : null)" aria-selected="@(_tab == Tab.Advanced)" @onclick="() => _tab = Tab.Advanced">@L["Advanced"]</button>
+    <button type="button" role="tab" class="st-tab @(_tab == Tab.Effective ? "is-on" : null)" aria-selected="@(_tab == Tab.Effective)" @onclick="() => _tab = Tab.Effective">@L["Effective access"]</button>
+  </div>
+
+  @if (_error is not null)
+  {
+    <p class="st-security__error" role="alert">@_error</p>
+  }
+  @if (_acl is null)
+  {
+    <p class="st-muted">@(_busy ? L["Loading…"] : "")</p>
+  }
+  else
+  {
+    @if (!CanChange && _tab != Tab.Effective)
+    {
+      <p class="st-muted st-small">@L["You can see these permissions but not change them."]</p>
+    }
+
+    @if (_adding)
+    {
+      <section class="st-security__add" aria-label="@L["Add a user or group"]">
+        <div class="st-row st-wrap">
+          <label class="st-field">@L["Add"]
+            <select class="st-input" value="@_addKind" @onchange="AddKindChangedAsync">
+              <option value="@PrincipalKind.User">@L["A person"]</option>
+              <option value="@PrincipalKind.Group">@L["A Storage group"]</option>
+              <option value="@PrincipalKind.Everyone">@L["Everyone"]</option>
+              <option value="@PrincipalKind.Permission">@L["Holders of a permission"]</option>
+              @if (IsFolder) { <option value="@PrincipalKind.CreatorOwner">@L["CREATOR OWNER"]</option> }
+            </select>
+          </label>
+          @switch (_addKind)
+          {
+            case PrincipalKind.User:
+              <label class="st-field st-grow">@L["Name or email"]
+                <input class="st-input" type="search" value="@_addSearch" @oninput="AddSearchAsync" autofocus />
+              </label>
+              break;
+            case PrincipalKind.Permission:
+              <label class="st-field st-grow">@L["Permission"]
+                <input class="st-input" placeholder="content.editor" @bind="_addPermission" />
+              </label>
+              <label class="st-field">@L["Scope"]
+                <input class="st-input" placeholder="tenant" @bind="_addScope" />
+              </label>
+              <button type="button" class="st-btn st-btn--primary" disabled="@(_addPermission.Trim().Length == 0)" @onclick="PickPermission">@L["Add"]</button>
+              break;
+            case PrincipalKind.Everyone:
+            case PrincipalKind.CreatorOwner:
+              <button type="button" class="st-btn st-btn--primary" @onclick="() => Pick(new Principal(_addKind, null, null, null))">@L["Add"]</button>
+              break;
+          }
+          <button type="button" class="st-btn" @onclick="() => _adding = false">@L["Cancel"]</button>
+        </div>
+        @if (_addKind == PrincipalKind.User && _peopleFound.Count > 0)
+        {
+          <ul class="st-list st-found">
+            @foreach (var person in _peopleFound)
+            {
+              <li><button type="button" class="st-pick" @onclick="() => Pick(new Principal(PrincipalKind.User, person.UserId, null, person.Name))">
+                <strong>@person.Name</strong> <span class="st-muted">@person.Email</span></button></li>
+            }
+          </ul>
+        }
+        else if (_addKind == PrincipalKind.User && _addSearch.Trim().Length >= 2)
+        {
+          <p class="st-muted st-small">@L["Nobody found. People appear here after they have opened Files once."]</p>
+        }
+        @if (_addKind == PrincipalKind.Group)
+        {
+          @if (_groups is { Count: > 0 } groups)
+          {
+            <ul class="st-list st-found">
+              @foreach (var group in groups)
+              {
+                <li><button type="button" class="st-pick" @onclick="() => Pick(new Principal(PrincipalKind.Group, group.Id.ToString(), null, group.Name))">
+                  <strong>@group.Name</strong> <span class="st-muted">@group.Description</span></button></li>
+              }
+            </ul>
+          }
+          else if (_groups is not null)
+          {
+            <p class="st-muted st-small">@L["There are no Storage groups yet."]</p>
+          }
+        }
+        @if (_addKind == PrincipalKind.Permission)
+        {
+          <p class="st-muted st-small">@L["Whoever holds this platform permission in the scope, while they hold it (\"tenant\": anywhere in the tenant)."]</p>
+        }
+      </section>
+    }
+
+    @switch (_tab)
+    {
+      case Tab.Permissions:
+      {
+        var principals = Principals();
+        <h3 class="st-security__h">@L["Group or user names"]</h3>
+        <ul class="st-security__names" role="listbox" aria-label="@L["Group or user names"]">
+          @foreach (var p in principals)
+          {
+            var key = p.Key;
+            <li role="option" aria-selected="@(key == _selected)" class="@(key == _selected ? "is-on" : null)" @onclick="() => _selected = key">@NameOf(p)</li>
+          }
+        </ul>
+        <div class="st-row st-security__under">
+          <button type="button" class="st-btn" disabled="@(!CanChange || _busy)" @onclick="AddToPermissions">@L["Add…"]</button>
+          <button type="button" class="st-btn" disabled="@(!CanChange || _busy || Selected is null || IsOnlyInherited(Selected))" @onclick="() => RemovePrincipal(Selected!)">@L["Remove"]</button>
+        </div>
+        @if (Selected is { } who)
+        {
+          var allow = MaskOf(who, AceType.Allow);
+          var deny = MaskOf(who, AceType.Deny);
+          <table class="st-security__grid">
+            <caption>@L["Permissions for {0}", NameOf(who)]</caption>
+            <thead><tr><th></th><th>@L["Allow"]</th><th>@L["Deny"]</th></tr></thead>
+            <tbody>
+              @foreach (var (label, mask) in Presets())
+              {
+                var m = mask;
+                var allowInherited = (allow.Inherited & m) == m;
+                var denyInherited = (deny.Inherited & m) == m;
+                <tr>
+                  <th scope="row">@label</th>
+                  <td><input type="checkbox" aria-label="@L["Allow {0}", label]" checked="@(((allow.Own | allow.Inherited) & m) == m)" disabled="@(!CanChange || allowInherited)"
+                             @onchange="e => TogglePreset(who, AceType.Allow, m, e.Value is true)" /></td>
+                  <td><input type="checkbox" aria-label="@L["Deny {0}", label]" checked="@(((deny.Own | deny.Inherited) & m) == m)" disabled="@(!CanChange || denyInherited)"
+                             @onchange="e => TogglePreset(who, AceType.Deny, m, e.Value is true)" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (HasSpecial(who))
+          {
+            <p class="st-muted st-small">@L["This name has special permissions too: see Advanced."]</p>
+          }
+          @if (allow.Inherited != 0 || deny.Inherited != 0)
+          {
+            <p class="st-muted st-small">@L["Greyed boxes are inherited from a parent folder; change them there, or turn off inheritance in Advanced."]</p>
+          }
+        }
+        break;
+      }
+
+      case Tab.Advanced:
+      {
+        <div class="st-row st-wrap st-security__owner">
+          <span class="st-grow">@L["Owner:"] <strong>@(_acl.OwnerId == MyUserId ? L["{0} (you)", _acl.OwnerName ?? _acl.OwnerId] : _acl.OwnerName ?? _acl.OwnerId)</strong></span>
+          @if (_acl.OwnerId != MyUserId && CanTakeOwnership)
+          {
+            <button type="button" class="st-btn" disabled="@(_busy || _dirty)" @onclick="() => SetOwnerAsync(null)">@L["Take ownership"]</button>
+          }
+          <button type="button" class="st-btn" disabled="@(_busy || _dirty)" @onclick="() => _changingOwner = !_changingOwner">@L["Change…"]</button>
+        </div>
+        @if (_dirty && !_changingOwner)
+        {
+          <p class="st-muted st-small">@L["Apply or cancel your changes before changing the owner."]</p>
+        }
+        @if (_changingOwner)
+        {
+          <div class="st-security__add">
+            <label class="st-field">@L["New owner (Storage administrators can give ownership to someone else)"]
+              <input class="st-input" type="search" value="@_ownerSearch" @oninput="OwnerSearchAsync" placeholder="@L["Name or email"]" />
+            </label>
+            @if (_ownersFound.Count > 0)
+            {
+              <ul class="st-list st-found">
+                @foreach (var person in _ownersFound)
+                {
+                  <li><button type="button" class="st-pick" @onclick="() => SetOwnerAsync(person.UserId)">
+                    <strong>@person.Name</strong> <span class="st-muted">@person.Email</span></button></li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <table class="st-versions st-security__entries">
+          <thead><tr><th>@L["Type"]</th><th>@L["Principal"]</th><th>@L["Access"]</th><th>@L["Inherited from"]</th><th>@L["Applies to"]</th><th></th></tr></thead>
+          <tbody>
+            @foreach (var e in _own)
+            {
+              var entry = e;
+              <tr>
+                <td>@(entry.Type == AceType.Allow ? L["Allow"] : L["Deny"])</td>
+                <td>@NameOf(entry.Who)</td>
+                <td>@AccessText(entry.Rights)</td>
+                <td class="st-muted">@L["None"]</td>
+                <td>@AppliesToText(entry.Inheritance)</td>
+                <td class="st-actions">
+                  <button type="button" class="st-btn" disabled="@(!CanChange || _busy)" @onclick="() => EditEntry(entry)">@L["Edit"]</button>
+                  <button type="button" class="st-btn" disabled="@(!CanChange || _busy)" @onclick="() => RemoveEntry(entry)">@L["Remove"]</button>
+                </td>
+              </tr>
+            }
+            @foreach (var e in Inherited)
+            {
+              <tr class="st-security__inherited">
+                <td>@(e.Type == AceType.Allow ? L["Allow"] : L["Deny"])</td>
+                <td>@NameOf(e)</td>
+                <td>@AccessText(e.Rights)</td>
+                <td>@SourceOf(e)</td>
+                <td>@AppliesToText(e.Inheritance)</td>
+                <td></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (_own.Count == 0 && !Inherited.Any())
+        {
+          <p class="st-muted st-small">@L["No entries: only the owner and Storage administrators can open this."]</p>
+        }
+
+        <div class="st-row st-wrap st-security__under">
+          <button type="button" class="st-btn" disabled="@(!CanChange || _busy)" @onclick="NewEntry">@L["Add…"]</button>
+          <button type="button" class="st-btn" disabled="@(!CanChange || _busy)" @onclick="InheritanceClicked">@(_inherits ? L["Disable inheritance"] : L["Enable inheritance"])</button>
+        </div>
+        @if (_askInheritance)
+        {
+          <div class="st-security__ask" role="alertdialog" aria-label="@L["Disable inheritance"]">
+            <p>@L["What would you like to do with the current inherited permissions?"]</p>
+            <div class="st-row st-wrap">
+              <button type="button" class="st-btn" @onclick="() => StopInheriting(true)">@L["Convert inherited permissions into explicit permissions on this item"]</button>
+              <button type="button" class="st-btn" @onclick="() => StopInheriting(false)">@L["Remove all inherited permissions from this item"]</button>
+              <button type="button" class="st-btn" @onclick="() => _askInheritance = false">@L["Cancel"]</button>
+            </div>
+          </div>
+        }
+
+        @if (_draft is { } draft)
+        {
+          <section class="st-security__entry" aria-label="@L["Permission entry"]">
+            <h3 class="st-security__h">@L["Permission entry for {0}", NameOf(draft.Who)]</h3>
+            <div class="st-row st-wrap">
+              <label class="st-field">@L["Type"]
+                <select class="st-input" value="@draft.Type" @onchange="e => draft.Type = Enum.Parse<AceType>(e.Value!.ToString()!)">
+                  <option value="@AceType.Allow">@L["Allow"]</option>
+                  <option value="@AceType.Deny">@L["Deny"]</option>
+                </select>
+              </label>
+              @if (IsFolder)
+              {
+                <label class="st-field">@L["Applies to"]
+                  <select class="st-input" value="@((draft.Inheritance & ~NoPropagate).ToString())" @onchange="SetAppliesTo">
+                    @foreach (var (label, flags) in AppliesTo())
+                    {
+                      <option value="@flags">@label</option>
+                    }
+                  </select>
+                </label>
+              }
+            </div>
+            @if (IsFolder && (draft.Inheritance & (Subfolders | Files)) != 0)
+            {
+              <label class="st-check st-small">
+                <input type="checkbox" checked="@((draft.Inheritance & NoPropagate) != 0)"
+                       @onchange="e => draft.Inheritance = e.Value is true ? draft.Inheritance | NoPropagate : draft.Inheritance & ~NoPropagate" />
+                @L["Only apply these permissions to items directly in this folder"]
+              </label>
+            }
+            <div class="st-security__rights">
+              @foreach (var (label, mask) in _showAdvancedRights ? Individual() : Presets())
+              {
+                var m = mask;
+                <label class="st-check">
+                  <input type="checkbox" checked="@((draft.Rights & m) == m)" @onchange="e => draft.Rights = e.Value is true ? draft.Rights | m : draft.Rights & ~m" />
+                  @label
+                </label>
+              }
+            </div>
+            <button type="button" class="st-btn st-btn--link" @onclick="() => _showAdvancedRights = !_showAdvancedRights">
+              @(_showAdvancedRights ? L["Show basic permissions"] : L["Show advanced permissions"])</button>
+            <div class="st-row st-security__under">
+              <button type="button" class="st-btn st-btn--primary" disabled="@(draft.Rights == 0)" @onclick="SaveDraft">@L["OK"]</button>
+              <button type="button" class="st-btn" @onclick="() => { _draft = null; _editing = null; }">@L["Cancel"]</button>
+            </div>
+          </section>
+        }
+        break;
+      }
+
+      case Tab.Effective:
+      {
+        <p class="st-muted st-small">@L["What a person may do with this item, through all their entries, groups and grants."]</p>
+        <label class="st-field">@L["Person"]
+          <input class="st-input" type="search" value="@_effectiveSearch" @oninput="EffectiveSearchAsync" placeholder="@L["Name or email"]" />
+        </label>
+        @if (_effectiveFound.Count > 0)
+        {
+          <ul class="st-list st-found">
+            @foreach (var person in _effectiveFound)
+            {
+              <li><button type="button" class="st-pick" @onclick="() => ShowEffectiveAsync(person)">
+                <strong>@person.Name</strong> <span class="st-muted">@person.Email</span></button></li>
+            }
+          </ul>
+        }
+        @if (_effectiveOf is { } of && _effective is { } eff)
+        {
+          <h3 class="st-security__h">@L["Effective access of {0}", of.Name]</h3>
+          @if (eff.IsAdmin)
+          {
+            <p class="st-small">@L["A Storage administrator: full control of everything."]</p>
+          }
+          else if (!eff.CanUseStorage)
+          {
+            <p class="st-small">@L["This person may not use Storage at all (no storage.access), so none of these apply."]</p>
+          }
+          <ul class="st-security__effective">
+            @foreach (var (label, mask) in Individual())
+            {
+              var yes = (eff.Rights & mask) == mask && (eff.CanUseStorage || eff.IsAdmin);
+              <li class="@(yes ? "is-yes" : "is-no")"><span aria-hidden="true">@(yes ? "✓" : "✕")</span> @label
+                <span class="st-sr">@(yes ? L["allowed"] : L["not allowed"])</span></li>
+            }
+          </ul>
+        }
+        break;
+      }
+    }
+  }
+
+  <div class="st-modal__buttons">
+    <button type="button" class="st-btn st-btn--primary" disabled="@(_busy || _acl is null)" @onclick="OkAsync">@L["OK"]</button>
+    <button type="button" class="st-btn" @onclick="CancelAsync">@L["Cancel"]</button>
+    <button type="button" class="st-btn" disabled="@(_busy || !_dirty)" @onclick="ApplyAsync">@L["Apply"]</button>
+  </div>
+</div>

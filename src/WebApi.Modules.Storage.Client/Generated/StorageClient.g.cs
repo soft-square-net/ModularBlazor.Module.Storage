@@ -3922,6 +3922,9 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
         [System.Text.Json.Serialization.JsonPropertyName("inheritedFromName")]
         public string? InheritedFromName { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("principalName")]
+        public string? PrincipalName { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -3971,6 +3974,9 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
         [System.Text.Json.Serialization.JsonPropertyName("entries")]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.IReadOnlyList<AceDto> Entries { get; set; } = new System.Collections.Generic.List<AceDto>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("ownerName")]
+        public string? OwnerName { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

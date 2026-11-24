@@ -1528,6 +1528,12 @@
               "null",
               "string"
             ]
+          },
+          "principalName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -1571,6 +1577,12 @@
             "items": {
               "$ref": "#/components/schemas/AceDto"
             }
+          },
+          "ownerName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

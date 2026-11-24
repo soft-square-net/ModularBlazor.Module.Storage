@@ -177,6 +177,28 @@
   </div>
 }
 
+@if (_securityOf is { } secured)
+{
+  <SecurityDialog ItemId="secured.Id" Name="@secured.Name" IsFolder="secured.IsFolder" Rights="secured.Rights" MyUserId="@_roots?.Home.OwnerId" FolderName="FolderDisplayName"
+                  Describe="Describe" OnClose="CloseSecurity" OnChanged="SecurityChangedAsync" />
+}
+
+@if (_edited is { } edited)
+{
+  <div class="st-scrim"></div>
+  <div class="st-modal st-editor" role="dialog" aria-modal="true" aria-labelledby="st-editor-title">
+    <div class="st-row st-editor__bar">
+      <h2 id="st-editor-title" class="mud-typography mud-typography-h6 st-grow">@L["Edit \"{0}\"", edited.Name]</h2>
+      @if (_editorChanged) { <span class="st-muted st-small">@L["Not saved"]</span> }
+      <button type="button" class="st-btn st-btn--primary" disabled="@(_editor is null || _editorBusy)" @onclick="() => SaveEditedAsync(copy: false)"
+              title="@L["Keeps the name: the edited image becomes the file's new version (the old one stays in Previous versions)."]">@L["Save"]</button>
+      <button type="button" class="st-btn" disabled="@(_editor is null || _editorBusy)" @onclick="() => SaveEditedAsync(copy: true)">@L["Save as a copy"]</button>
+      <button type="button" class="st-btn" disabled="@_editorBusy" @onclick="() => CloseEditorAsync()">@L["Close"]</button>
+    </div>
+    <div class="st-editor__host" @ref="_editorHost"></div>
+  </div>
+}
+
 @if (_confirm is { } confirm)
 {
   <div class="st-scrim st-scrim--top" @onclick="() => Answer(false)"></div>
