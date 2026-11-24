@@ -5,10 +5,11 @@ namespace soft.square.net.WebApi.Modules.Storage.UseCases.Items;
 /// <summary>
 /// Delete (Del): to the recycle bin. Each item needs Delete, or Delete children on its folder. A deleted folder takes
 /// everything below it out of reach with it; nothing below it is changed, so restoring it brings it all back.
+/// <see cref="Permanent"/> (Shift+Del): removed for good at once, with the bytes no other file uses.
 /// </summary>
-public sealed record DeleteItemsCommand(IReadOnlyList<Guid> Ids) : ICommand<Result<BatchResult>>;
+public sealed record DeleteItemsCommand(IReadOnlyList<Guid> Ids, bool Permanent = false) : ICommand<Result<BatchResult>>;
 
-public sealed class DeleteItemsHandler(IStorageStore store, ItemAccess access, StorageCaller caller) : ICommandHandler<DeleteItemsCommand, Result<BatchResult>>
+public sealed class DeleteItemsHandler(IStorageStore store, ItemAccess access, StorageCaller caller, Purger purger) : ICommandHandler<DeleteItemsCommand, Result<BatchResult>>
 {
     public async ValueTask<Result<BatchResult>> Handle(DeleteItemsCommand command, CancellationToken ct)
     {
@@ -24,9 +25,11 @@ public sealed class DeleteItemsHandler(IStorageStore store, ItemAccess access, S
                 reached.Value.Item.Delete(caller.UserId, caller.Now);
                 await store.SaveAsync(ct);
                 done.Add(ItemDto.From(reached.Value.Item, reached.Value.Rights));
+                if (command.Permanent) await purger.PurgeAsync(reached.Value.Item, ct);
             }
             catch (DomainException e) { failed.Add(new BatchFailure(id, e.Message)); }
         }
+        if (command.Permanent && done.Count > 0) await purger.DeleteUnusedBlobsAsync(ct);
         return new BatchResult(done, failed);
     }
 }

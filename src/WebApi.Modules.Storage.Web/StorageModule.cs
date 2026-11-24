@@ -25,6 +25,8 @@ public sealed class StorageModule : IRuntimeModule
             ["Storage:UploadLifetime"] = "1.00:00:00",
             ["Storage:DownloadLinkLifetime"] = "00:10:00",
             ["Storage:MaxCopyItems"] = "10000",
+            ["Storage:RecycleBinDays"] = "30",
+            ["Storage:SweepInterval"] = "01:00:00",
             ["Storage:Local:Root"] = ""
         },
         Permissions = StoragePermissions.All

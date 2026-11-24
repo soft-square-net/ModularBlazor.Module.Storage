@@ -18,6 +18,12 @@ public sealed class StorageOptions
     /// <summary>How long a download link (presigned or signed by the module) works.</summary>
     public TimeSpan DownloadLinkLifetime { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>Days an item stays in the recycle bin before the sweeper removes it for good (0: until the bin is emptied).</summary>
+    public int RecycleBinDays { get; set; } = 30;
+
+    /// <summary>How often each tenant is swept (bin retention, expired uploads, unused blobs); zero turns the sweeper off.</summary>
+    public TimeSpan SweepInterval { get; set; } = TimeSpan.FromHours(1);
+
     /// <summary>Most items a single copy may create (a folder copies everything below it).</summary>
     public int MaxCopyItems { get; set; } = 10_000;
 

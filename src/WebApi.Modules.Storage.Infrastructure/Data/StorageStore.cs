@@ -57,6 +57,25 @@ internal sealed class StorageStore(StorageDbContext db) : IStorageStore
         return live;
     }
 
+    public async Task<IReadOnlyList<Item>> SubtreeAsync(Item folder, CancellationToken ct) =>
+        await Below(folder).OrderBy(i => i.Depth).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Item>> RecycleBinAsync(string? deletedBy, CancellationToken ct)
+    {
+        var query = db.Items.Where(i => i.DeletedAt != null);
+        if (deletedBy is not null) query = query.Where(i => i.DeletedBy == deletedBy);
+        return await query.OrderByDescending(i => i.DeletedAt).ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<Item>> DeletedBeforeAsync(DateTimeOffset before, int take, CancellationToken ct) =>
+        await db.Items.Where(i => i.DeletedAt != null && i.DeletedAt < before).OrderBy(i => i.DeletedAt).Take(take).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Blob>> UnusedBlobsAsync(int take, CancellationToken ct) =>
+        await db.Blobs.Where(b => b.References <= 0).OrderBy(b => b.CreatedAt).Take(take).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<UploadSession>> ExpiredUploadsAsync(DateTimeOffset now, int take, CancellationToken ct) =>
+        await db.Uploads.Where(u => u.ExpiresAt < now).OrderBy(u => u.ExpiresAt).Take(take).ToListAsync(ct);
+
     public async Task<int> SubtreeHeightAsync(Item folder, CancellationToken ct)
     {
         var deepest = await Below(folder).Select(i => (int?)i.Depth).MaxAsync(ct);

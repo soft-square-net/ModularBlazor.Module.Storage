@@ -21,7 +21,9 @@ public sealed class StorageRoutes : ICarterModule
         UploadEndpoints.Map(users);
         AccessEndpoints.Map(users);
 
-        AccessEndpoints.MapAdmin(storage.MapGroup("").RequirePermission(StoragePermissions.Admin));
+        var admins = storage.MapGroup("").RequirePermission(StoragePermissions.Admin);
+        AccessEndpoints.MapAdmin(admins);
+        ItemEndpoints.MapAdmin(admins);
 
         ItemEndpoints.MapLinks(storage);
     }

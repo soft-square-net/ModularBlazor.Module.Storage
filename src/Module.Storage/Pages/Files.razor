@@ -21,3 +21,53 @@
   }
   <div class="st-explorer" @ref="_host" hidden="@(_error is not null)"></div>
 </div>
+
+@if (_versionsOf is { } file)
+{
+  <div class="st-scrim" @onclick="CloseVersions"></div>
+  <div class="st-modal st-modal--wide" role="dialog" aria-modal="true" aria-labelledby="st-versions-title">
+    <h2 id="st-versions-title" class="mud-typography mud-typography-h6">@L["Previous versions of \"{0}\"", file.Name]</h2>
+    @if (_versions.Count == 0)
+    {
+      <p class="st-muted">@(_versionsBusy ? L["Loading…"] : L["There are no previous versions."])</p>
+    }
+    else
+    {
+      <table class="st-versions">
+        <thead><tr><th>@L["Version"]</th><th>@L["Date"]</th><th>@L["Size"]</th><th></th></tr></thead>
+        <tbody>
+          @foreach (var v in _versions)
+          {
+            var current = v.Number == _versions[0].Number;
+            <tr>
+              <td>@v.Number@if (current) { <span class="st-muted st-current">@L["current"]</span> }</td>
+              <td>@v.CreatedAt.ToLocalTime().ToString("g")</td>
+              <td>@SizeText(v.Size)</td>
+              <td class="st-actions">
+                <button type="button" class="st-btn" disabled="@_versionsBusy" @onclick="() => OpenVersionAsync(v.Number)">@L["Open"]</button>
+                @if (!current)
+                {
+                  <button type="button" class="st-btn" disabled="@_versionsBusy" @onclick="() => RestoreVersionAsync(v.Number)">@L["Restore"]</button>
+                  <button type="button" class="st-btn st-btn--danger" disabled="@_versionsBusy" @onclick="() => DeleteVersionAsync(v)">@L["Delete"]</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    <div class="st-modal__buttons"><button type="button" class="st-btn" @onclick="CloseVersions">@L["Close"]</button></div>
+  </div>
+}
+
+@if (_confirm is { } confirm)
+{
+  <div class="st-scrim st-scrim--top" @onclick="() => Answer(false)"></div>
+  <div class="st-modal st-modal--top" role="alertdialog" aria-modal="true" aria-describedby="st-confirm-text">
+    <p id="st-confirm-text">@confirm.Question</p>
+    <div class="st-modal__buttons">
+      <button type="button" class="st-btn st-btn--danger" @onclick="() => Answer(true)">@confirm.Action</button>
+      <button type="button" class="st-btn" @onclick="() => Answer(false)" autofocus>@L["Cancel"]</button>
+    </div>
+  </div>
+}

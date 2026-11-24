@@ -98,11 +98,51 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Delete to the recycle bin.
+        /// Delete to the recycle bin; permanent: true removes them for good (Shift+Delete).
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="StorageApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<BatchResult> DeleteItemsAsync(DeleteItemsCommand body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The recycle bin: what you deleted (Storage admins: everything deleted in the tenant), newest first.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DeletedItemDto>> GetRecycleBinAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Restore items to their folders (a taken name gets a number); a deleted folder must be restored first.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<BatchResult> RestoreItemsAsync(RestoreItemsCommand body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Delete items in the recycle bin for good; no ids: empty the bin.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<BatchResult> PurgeItemsAsync(PurgeItemsCommand body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Make an earlier version current again, as a new version (Write data).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ItemDetail> RestoreVersionAsync(System.Guid id, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Remove an earlier version (Write data); never the current one.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ItemDetail> DeleteVersionAsync(System.Guid id, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
@@ -223,6 +263,14 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
         /// <returns>No Content</returns>
         /// <exception cref="StorageApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task DeleteGroupAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Sweep the tenant now: purge what stayed in the recycle bin too long, abort expired uploads, delete unused blobs.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SweepResult> SweepAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -893,7 +941,7 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
-        /// Delete to the recycle bin.
+        /// Delete to the recycle bin; permanent: true removes them for good (Shift+Delete).
         /// </summary>
         /// <returns>OK</returns>
         /// <exception cref="StorageApiException">A server side error occurred.</exception>
@@ -946,6 +994,410 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
                         if (status_ == 200)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<BatchResult>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The recycle bin: what you deleted (Storage admins: everything deleted in the tenant), newest first.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DeletedItemDto>> GetRecycleBinAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/recycle-bin"
+                    urlBuilder_.Append("api/storage/recycle-bin");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<DeletedItemDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Restore items to their folders (a taken name gets a number); a deleted folder must be restored first.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<BatchResult> RestoreItemsAsync(RestoreItemsCommand body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (body == null)
+                throw new System.ArgumentNullException("body");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(body, JsonSerializerSettings);
+                    var content_ = new System.Net.Http.ByteArrayContent(json_);
+                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
+                    request_.Content = content_;
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/recycle-bin/restore"
+                    urlBuilder_.Append("api/storage/recycle-bin/restore");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<BatchResult>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Delete items in the recycle bin for good; no ids: empty the bin.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<BatchResult> PurgeItemsAsync(PurgeItemsCommand body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (body == null)
+                throw new System.ArgumentNullException("body");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(body, JsonSerializerSettings);
+                    var content_ = new System.Net.Http.ByteArrayContent(json_);
+                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
+                    request_.Content = content_;
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/recycle-bin/purge"
+                    urlBuilder_.Append("api/storage/recycle-bin/purge");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<BatchResult>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Make an earlier version current again, as a new version (Write data).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<ItemDetail> RestoreVersionAsync(System.Guid id, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            if (number == null)
+                throw new System.ArgumentNullException("number");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Content = new System.Net.Http.StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json");
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/items/{id}/versions/{number}/restore"
+                    urlBuilder_.Append("api/storage/items/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/versions/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(number, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/restore");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ItemDetail>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Remove an earlier version (Write data); never the current one.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<ItemDetail> DeleteVersionAsync(System.Guid id, int number, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (id == null)
+                throw new System.ArgumentNullException("id");
+
+            if (number == null)
+                throw new System.ArgumentNullException("number");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("DELETE");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/items/{id}/versions/{number}"
+                    urlBuilder_.Append("api/storage/items/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/versions/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(number, System.Globalization.CultureInfo.InvariantCulture)));
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ItemDetail>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -2223,6 +2675,81 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
             }
         }
 
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Sweep the tenant now: purge what stayed in the recycle bin too long, abort expired uploads, delete unused blobs.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<SweepResult> SweepAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Content = new System.Net.Http.StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json");
+                    request_.Method = new System.Net.Http.HttpMethod("POST");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/maintenance/sweep"
+                    urlBuilder_.Append("api/storage/maintenance/sweep");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<SweepResult>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
         protected struct ObjectResponseResult<T>
         {
             public ObjectResponseResult(T responseObject, string responseText)
@@ -2572,12 +3099,49 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class DeletedItemDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("item")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public ItemDto Item { get; set; } = new ItemDto();
+
+        [System.Text.Json.Serialization.JsonPropertyName("originalFolderId")]
+        public System.Guid? OriginalFolderId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("originalPath")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<Crumb> OriginalPath { get; set; } = new System.Collections.Generic.List<Crumb>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("deletedAt")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset DeletedAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("deletedBy")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string DeletedBy { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class DeleteItemsCommand
     {
 
         [System.Text.Json.Serialization.JsonPropertyName("ids")]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.IReadOnlyList<System.Guid> Ids { get; set; } = new System.Collections.Generic.List<System.Guid>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("permanent")]
+        public bool? Permanent { get; set; } = false;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2953,6 +3517,25 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class PurgeItemsCommand
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("ids")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<System.Guid> Ids { get; set; } = new System.Collections.Generic.List<System.Guid>();
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class RenameRequest
     {
 
@@ -2962,6 +3545,25 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         [System.Text.Json.Serialization.JsonPropertyName("version")]
         public int? Version { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class RestoreItemsCommand
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("ids")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<System.Guid> Ids { get; set; } = new System.Collections.Generic.List<System.Guid>();
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -3089,6 +3691,33 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         [System.Text.Json.Serialization.JsonPropertyName("quota")]
         public long? Quota { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class SweepResult
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("itemsPurged")]
+        public int ItemsPurged { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("blobsDeleted")]
+        public int BlobsDeleted { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("bytesFreed")]
+        public long BytesFreed { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("uploadsExpired")]
+        public int UploadsExpired { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

@@ -156,4 +156,39 @@ public sealed class StorageStoreTests : IDisposable
         await using (var db = _database.For("acme")) (await new StorageStore(db).UsageAsync(Ct)).ShouldBe((120L, 7L));
         await using (var db = _database.For("globex")) (await new StorageStore(db).UsageAsync(Ct)).ShouldBe((0L, 0L));
     }
+
+    [Fact]
+    public async Task TheRecycleBinQueries()
+    {
+        var (root, a, b, doc) = await SeedAsync();
+        await using (var db = _database.For("acme"))
+        {
+            var store = new StorageStore(db);
+            var loaded = (await store.ChainAsync(doc.Id, Ct))!;
+            loaded[^1].Delete("ana", Now.AddDays(-40));
+            loaded[1].Delete("bob", Now.AddDays(-1)); // a
+            var used = Core.BlobAggregate.Blob.Create("t/acme/used", "", 5, Now);
+            var unused = Core.BlobAggregate.Blob.Create("t/acme/unused", "", 5, Now);
+            unused.Release();
+            store.Add(used);
+            store.Add(unused);
+            store.Add(Core.UploadAggregate.UploadSession.Start(a.Id, "old.bin", null, 7, 1024, 1000, Core.UploadAggregate.NameConflict.Fail,
+                "t/acme/old", "", "ana", Now.AddDays(-3), TimeSpan.FromDays(1)));
+            store.Add(Core.UploadAggregate.UploadSession.Start(a.Id, "new.bin", null, 7, 1024, 1000, Core.UploadAggregate.NameConflict.Fail,
+                "t/acme/new", "", "ana", Now, TimeSpan.FromDays(1)));
+            await store.SaveAsync(Ct);
+        }
+
+        await using (var db = _database.For("acme"))
+        {
+            var store = new StorageStore(db);
+            (await store.RecycleBinAsync(null, Ct)).Select(i => i.Id).ShouldBe([a.Id, doc.Id]); // newest first
+            (await store.RecycleBinAsync("ana", Ct)).Select(i => i.Id).ShouldBe([doc.Id]);
+            (await store.DeletedBeforeAsync(Now.AddDays(-30), 10, Ct)).Select(i => i.Id).ShouldBe([doc.Id]);
+            (await store.SubtreeAsync((await store.ChainAsync(a.Id, Ct))![^1], Ct)).Select(i => i.Id).ShouldBe([b.Id, doc.Id]);
+            (await store.UnusedBlobsAsync(10, Ct)).Select(x => x.Id).ShouldBe(["t/acme/unused"]);
+            (await store.ExpiredUploadsAsync(Now, 10, Ct)).Select(u => u.Name).ShouldBe(["old.bin"]);
+        }
+        await using (var db = _database.For("globex")) (await new StorageStore(db).RecycleBinAsync(null, Ct)).ShouldBeEmpty();
+    }
 }

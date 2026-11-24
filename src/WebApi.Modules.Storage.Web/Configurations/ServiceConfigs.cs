@@ -22,6 +22,8 @@ public static class ServiceConfigs
 
         services.AddScoped<StorageCaller>();
         services.AddScoped<ItemAccess>();
+        services.AddScoped<Purger>();
+        services.AddHostedService<StorageSweeper>();
         services.AddSingleton<IDownloadTickets, DownloadTickets>();
 
         services.AddMediator(options =>

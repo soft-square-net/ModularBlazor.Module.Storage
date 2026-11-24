@@ -33,4 +33,16 @@ public sealed class StorageDbContext(DbContextOptions<StorageDbContext> options,
             modelBuilder.Entity<UploadSession>().Property(u => u.Parts).HasColumnType("NCLOB");
         }
     }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        // SQLite (the integration tests) cannot compare or sort DateTimeOffset in SQL; the recycle bin, the sweeper and
+        // upload expiry do. Stored as a number there, EF's documented workaround. The four real engines are unaffected.
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            configurationBuilder.Properties<DateTimeOffset>().HaveConversion<Microsoft.EntityFrameworkCore.Storage.ValueConversion.DateTimeOffsetToBinaryConverter>();
+            configurationBuilder.Properties<DateTimeOffset?>().HaveConversion<Microsoft.EntityFrameworkCore.Storage.ValueConversion.DateTimeOffsetToBinaryConverter>();
+        }
+    }
 }

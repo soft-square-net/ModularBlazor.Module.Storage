@@ -255,7 +255,7 @@
         "tags": [
           "Storage"
         ],
-        "summary": "Delete to the recycle bin.",
+        "summary": "Delete to the recycle bin; permanent: true removes them for good (Shift+Delete).",
         "operationId": "Storage_DeleteItems",
         "requestBody": {
           "content": {
@@ -274,6 +274,176 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/recycle-bin": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "The recycle bin: what you deleted (Storage admins: everything deleted in the tenant), newest first.",
+        "operationId": "Storage_GetRecycleBin",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeletedItemDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/recycle-bin/restore": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Restore items to their folders (a taken name gets a number); a deleted folder must be restored first.",
+        "operationId": "Storage_RestoreItems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreItemsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/recycle-bin/purge": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Delete items in the recycle bin for good; no ids: empty the bin.",
+        "operationId": "Storage_PurgeItems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurgeItemsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/versions/{number}/restore": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Make an earlier version current again, as a new version (Write data).",
+        "operationId": "Storage_RestoreVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/storage/items/{id}/versions/{number}": {
+      "delete": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Remove an earlier version (Write data); never the current one.",
+        "operationId": "Storage_DeleteVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDetail"
                 }
               }
             }
@@ -843,6 +1013,27 @@
           }
         }
       }
+    },
+    "/api/storage/maintenance/sweep": {
+      "post": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "Sweep the tenant now: purge what stayed in the recycle bin too long, abort expired uploads, delete unused blobs.",
+        "operationId": "Storage_Sweep",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SweepResult"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1045,6 +1236,41 @@
           }
         }
       },
+      "DeletedItemDto": {
+        "required": [
+          "item",
+          "originalFolderId",
+          "originalPath",
+          "deletedAt",
+          "deletedBy"
+        ],
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/ItemDto"
+          },
+          "originalFolderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "originalPath": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Crumb"
+            }
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedBy": {
+            "type": "string"
+          }
+        }
+      },
       "DeleteItemsCommand": {
         "required": [
           "ids"
@@ -1057,6 +1283,10 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "permanent": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -1400,6 +1630,21 @@
           }
         }
       },
+      "PurgeItemsCommand": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "RenameRequest": {
         "required": [
           "name",
@@ -1416,6 +1661,21 @@
               "integer"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "RestoreItemsCommand": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -1535,6 +1795,33 @@
       "Stream": {
         "type": "string",
         "format": "binary"
+      },
+      "SweepResult": {
+        "required": [
+          "itemsPurged",
+          "blobsDeleted",
+          "bytesFreed",
+          "uploadsExpired"
+        ],
+        "type": "object",
+        "properties": {
+          "itemsPurged": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blobsDeleted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bytesFreed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uploadsExpired": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "UploadDto": {
         "required": [

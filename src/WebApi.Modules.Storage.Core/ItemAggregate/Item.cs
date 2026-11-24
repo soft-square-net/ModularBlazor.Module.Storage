@@ -231,6 +231,48 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         Version++;
     }
 
+    /// <summary>
+    /// Takes the item out of the recycle bin, back into its folder, under <paramref name="name"/> (its own name, or a
+    /// numbered one when that is taken meanwhile). The folder must not be in the recycle bin (the caller checks).
+    /// </summary>
+    public void Restore(string name, string by, DateTimeOffset now)
+    {
+        if (!IsDeleted) throw new DomainException($"'{Name}' is not in the recycle bin.");
+        DeletedAt = null;
+        DeletedBy = null;
+        SetName(name);
+        Touch(by, now);
+    }
+
+    /// <summary>
+    /// An earlier version becomes the current one again, as a new version with the same bytes (Windows' "Restore"
+    /// in Previous Versions); the history is kept. Returns the new version, whose blob gains a reference.
+    /// </summary>
+    public FileVersion RestoreVersion(int number, string by, DateTimeOffset now)
+    {
+        var old = VersionOf(number);
+        if (number == CurrentVersion) throw new DomainException($"Version {number} is the current version.");
+        AddVersion(FileVersion.Create(old.BlobKey, old.Size, old.ContentType, by, now), by, now);
+        return Current!;
+    }
+
+    /// <summary>Removes an earlier version (never the current one). Returns it: its blob loses a reference.</summary>
+    public FileVersion RemoveVersion(int number, string by, DateTimeOffset now)
+    {
+        var old = VersionOf(number);
+        if (number == CurrentVersion) throw new DomainException("The current version cannot be removed.");
+        _versions.Remove(old);
+        Touch(by, now);
+        return old;
+    }
+
+    private FileVersion VersionOf(int number)
+    {
+        if (IsFolder) throw new DomainException("Folders have no versions.");
+        EnsureNotDeleted();
+        return _versions.FirstOrDefault(v => v.Number == number) ?? throw new DomainException($"'{Name}' has no version {number}.");
+    }
+
     /// <summary>Sets the item's own entries and whether it inherits (the Security dialog's "Apply").</summary>
     public void SetAccess(bool inheritsAccess, IEnumerable<AccessEntry> entries, string by, DateTimeOffset now)
     {

@@ -6,3 +6,28 @@
 .st-explorer > * { flex: 1 1 auto; min-width: 0; }
 .st-muted { color: var(--mud-palette-text-secondary); }
 .st-error { color: var(--mud-palette-error); padding: 16px; border: 1px solid var(--mud-palette-error); border-radius: var(--mud-default-borderradius, 8px); }
+
+/* Dialogs: confirm (above everything) and Previous versions. */
+.st-scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .32); z-index: 1400; }
+.st-scrim--top { z-index: 1402; }
+.st-modal { position: fixed; inset-block-start: 50%; inset-inline-start: 50%; transform: translate(-50%, -50%); z-index: 1401;
+  inline-size: min(420px, calc(100vw - 32px)); max-block-size: calc(100dvh - 32px); overflow: auto; padding: 20px 24px;
+  background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border: 1px solid var(--mud-palette-lines-default);
+  border-radius: var(--mud-default-borderradius, 8px); box-shadow: 0 8px 32px rgb(0 0 0 / .28); }
+[dir="rtl"] .st-modal { transform: translate(50%, -50%); }
+.st-modal--wide { inline-size: min(640px, calc(100vw - 32px)); }
+.st-modal--top { z-index: 1403; }
+.st-modal h2 { margin: 0 0 12px; }
+.st-modal__buttons { display: flex; justify-content: flex-end; gap: 8px; margin-block-start: 16px; }
+.st-btn { font: inherit; padding: 6px 14px; border-radius: 4px; cursor: pointer; border: 1px solid var(--mud-palette-lines-default);
+  background: var(--mud-palette-background-gray, transparent); color: inherit; }
+.st-btn:hover:not(:disabled) { background: var(--mud-palette-action-default-hover); }
+.st-btn:disabled { opacity: .5; cursor: default; }
+.st-btn--danger { background: var(--mud-palette-error); border-color: var(--mud-palette-error); color: var(--mud-palette-error-text, #fff); }
+.st-btn--danger:hover:not(:disabled) { filter: brightness(.92); background: var(--mud-palette-error); }
+.st-versions { inline-size: 100%; border-collapse: collapse; font-size: .875rem; }
+.st-versions th, .st-versions td { padding: 6px 8px; text-align: start; border-block-end: 1px solid var(--mud-palette-lines-default); white-space: nowrap; }
+.st-versions td:first-child { white-space: normal; }
+.st-versions th { font-weight: 600; color: var(--mud-palette-text-secondary); }
+.st-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.st-current { margin-inline-start: 6px; }

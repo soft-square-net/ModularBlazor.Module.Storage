@@ -19,6 +19,9 @@ public sealed class HandlerFixture
     public FixedClock Clock { get; } = new(Tree.Now);
     public StorageCaller Caller { get; }
     public ItemAccess Access { get; }
+    public soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStores Stores { get; } = Substitute.For<soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStores>();
+    public soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStore Blobs { get; } = Substitute.For<soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStore>();
+    public Purger Purger { get; }
 
     private readonly Dictionary<Guid, Item> _items = [];
 
@@ -30,6 +33,8 @@ public sealed class HandlerFixture
         Tenant.Tenant.Returns(new TenantInfo("acme", "Acme", TenantStatus.Active, [], "", ""));
         Caller = new StorageCaller(Scopes, Groups, Clock);
         Access = new ItemAccess(Store, Caller);
+        Stores.Get(Arg.Any<string>()).Returns(Blobs);
+        Purger = new Purger(Store, Stores, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
 
         Store.ChainAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(call => Chain(call.Arg<Guid>()));
         Store.ChildrenAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())

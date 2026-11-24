@@ -4,12 +4,12 @@ Storage: the tenant's files and folders, with NTFS-style access control, behind 
 module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own
 as the bundle `storage`.
 
-> **Status: phase 4 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
-> through named connections, with presigned downloads and per-tenant quotas) and the Files page (the Explorer: browsing,
-> new folders, rename, cut/copy/paste and drag to move, delete, uploads of files and folders, downloads, image previews)
-> are in. The Explorer needs MudTail's explorer component, on the platform's `feat/mudtail-explorer` branch. The
-> Security dialog and the image editor, the recycle bin and versions (phase 5), sharing (phase 6) and the integration
-> points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
+> **Status: phase 5 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
+> through named connections, with presigned downloads and per-tenant quotas), the Files page (the Explorer: browsing,
+> new folders, rename, cut/copy/paste and drag to move, delete, uploads of files and folders, downloads, image previews),
+> the recycle bin, previous versions and the sweeper (purging old deletions, unused blobs and abandoned uploads) are in.
+> The Explorer needs MudTail's explorer component, on the platform's `feat/mudtail-explorer` branch. The Security
+> dialog and the image editor, sharing (phase 6) and the integration points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
 
 ## Layout
 
@@ -35,7 +35,12 @@ playground/    Aspire AppHost: the platform (from a Platform checkout) with this
   Copies share a blob (reference counted); every upload of a file is a new version.
 - **Top folders** per tenant, created on first use: `Files` (shared), `Users` (homes) and one home per user, named by
   the user id. Names follow the Windows rules (no `\ / : * ? " < > |`, no reserved names, case-insensitive uniqueness
-  per folder). Deleting moves to the recycle bin (soft delete).
+  per folder). Deleting moves to the recycle bin (soft delete): a deleted folder takes what is in it along, and
+  restoring puts it back where it was (numbered, "a (2).txt", if the name was taken meanwhile; a folder that is itself
+  in the bin must be restored first). Each user sees what they deleted; `storage.admin` sees the whole tenant's bin.
+- **Purging and blob GC:** purging (Shift+Delete, deleting in the bin, emptying it, or the sweeper after
+  `Storage:RecycleBinDays`) removes the items and releases each version's blob. A blob nothing refers to any more
+  (no version, no copy) is deleted from its store, then its row; a store that fails is retried on the next sweep.
 - **Platform permissions** are the gate: `storage.access` to use Storage at all, `storage.admin` to bypass the access
   lists and manage storage groups.
 - **Access lists (NTFS-style)** on every item: allow and deny entries for a user, everyone in the tenant, the holders of
@@ -72,7 +77,13 @@ Under `/api/storage`, tenant-bound (header `X-Tenant`, the host name or the toke
 | `POST /uploads`, `PUT /uploads/{id}/chunks?offset=`, `GET /uploads/{id}`, `POST /uploads/{id}/complete`, `DELETE /uploads/{id}` | Resumable upload; on a name conflict: `Fail`, `Replace` (new version) or `KeepBoth` |
 | `GET`/`PUT /items/{id}/acl`, `PUT /items/{id}/owner` | The access list (with inherited entries and where they come from), the owner |
 | `GET /items/{id}/effective-access?userId=` | The rights a user has on an item, and whether they may use Storage at all |
+| `POST /items/delete` with `permanent: true` | Delete without the recycle bin (needs the same rights) |
+| `GET /recycle-bin` | What the caller deleted (everything, for `storage.admin`): the item, where it was, when, by whom |
+| `POST /recycle-bin/restore`, `POST /recycle-bin/purge` | Restore or purge a batch (purge with no ids empties the visible bin); the deleter, or an admin for purge |
+| `POST /items/{id}/versions/{number}/restore` | Make an old version current again (a new version with its content; needs `CreateFiles` on the folder) |
+| `DELETE /items/{id}/versions/{number}` | Delete an old version (not the current one) |
 | `GET /groups`; `POST`, `PUT`, `DELETE /groups/...` (`storage.admin`) | Storage groups |
+| `POST /maintenance/sweep` (`storage.admin`) | Run the tenant's sweep now; returns what it purged and freed |
 
 ## Settings
 
@@ -83,6 +94,8 @@ written to the module catalog, so keys and secrets belong there):
 | Key | What it is |
 | --- | --- |
 | `Storage:MaxFileSize`, `Storage:ChunkSize`, `Storage:UploadLifetime`, `Storage:DownloadLinkLifetime`, `Storage:MaxCopyItems` | Limits and lifetimes |
+| `Storage:RecycleBinDays` | Days a deleted item stays in the recycle bin before the sweeper purges it (default 30; 0 keeps everything) |
+| `Storage:SweepInterval` | How often every active tenant is swept (default `01:00:00`, the first a minute after the module loads; `00:00:00` turns it off). Every replica sweeps; a sweep is safe to run twice |
 | `Storage:Local:Root` | The local disk (default `%LocalAppData%/ModularBlazor/storage`); every replica must see the same folder |
 | `Storage:Connections:{name}:Kind` | `S3` (default) or `Local` |
 | `...:ServiceUrl`, `...:Region` | S3: the endpoint (empty for Amazon S3) and the region (default `us-east-1`) |
@@ -170,6 +183,11 @@ gets a number (`KeepBoth`), and a picked folder keeps its structure. The rights 
 deny lists, so refused commands are greyed out: renaming, moving and deleting need `Delete` on the item or
 `DeleteChildren` on its folder; New folder needs `CreateFolders`, uploads `CreateFiles`. Search filters the open
 folder. Pinned folders (Quick access) are kept in the browser. Share, Security and Edit are disabled until their phases.
+
+The **Recycle bin** is a place in the navigation pane: Date modified is when the item was deleted; Restore puts the
+selection back, Delete purges it, and Empty recycle bin purges everything the caller can see, each after asking.
+Shift+Delete anywhere skips the bin (after asking). **Previous versions** (a file's context menu) lists every kept
+version: open one in a new tab, restore it (it becomes a new current version) or delete it.
 
 ## Developing
 

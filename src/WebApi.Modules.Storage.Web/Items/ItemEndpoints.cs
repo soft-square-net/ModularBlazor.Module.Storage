@@ -54,7 +54,31 @@ public static class ItemEndpoints
         app.MapPost("/items/delete", async (DeleteItemsCommand command, ISender sender, CancellationToken ct) =>
                 (await sender.Send(command, ct)).ToOkResult())
             .WithName("Storage_DeleteItems")
-            .WithSummary("Delete to the recycle bin.");
+            .WithSummary("Delete to the recycle bin; permanent: true removes them for good (Shift+Delete).");
+
+        app.MapGet("/recycle-bin", async (ISender sender, CancellationToken ct) => (await sender.Send(new GetRecycleBinQuery(), ct)).ToOkResult())
+            .WithName("Storage_GetRecycleBin")
+            .WithSummary("The recycle bin: what you deleted (Storage admins: everything deleted in the tenant), newest first.");
+
+        app.MapPost("/recycle-bin/restore", async (RestoreItemsCommand command, ISender sender, CancellationToken ct) =>
+                (await sender.Send(command, ct)).ToOkResult())
+            .WithName("Storage_RestoreItems")
+            .WithSummary("Restore items to their folders (a taken name gets a number); a deleted folder must be restored first.");
+
+        app.MapPost("/recycle-bin/purge", async (PurgeItemsCommand command, ISender sender, CancellationToken ct) =>
+                (await sender.Send(command, ct)).ToOkResult())
+            .WithName("Storage_PurgeItems")
+            .WithSummary("Delete items in the recycle bin for good; no ids: empty the bin.");
+
+        app.MapPost("/items/{id:guid}/versions/{number:int}/restore", async (Guid id, int number, ISender sender, CancellationToken ct) =>
+                (await sender.Send(new RestoreVersionCommand(id, number), ct)).ToOkResult())
+            .WithName("Storage_RestoreVersion")
+            .WithSummary("Make an earlier version current again, as a new version (Write data).");
+
+        app.MapDelete("/items/{id:guid}/versions/{number:int}", async (Guid id, int number, ISender sender, CancellationToken ct) =>
+                (await sender.Send(new DeleteVersionCommand(id, number), ct)).ToOkResult())
+            .WithName("Storage_DeleteVersion")
+            .WithSummary("Remove an earlier version (Write data); never the current one.");
 
         app.MapGet("/items/{id:guid}/content", async Task<Results<FileStreamHttpResult, ProblemHttpResult>> (Guid id, int? version, bool? inline,
                 ISender sender, HttpResponse response, CancellationToken ct) =>
@@ -73,6 +97,14 @@ public static class ItemEndpoints
                 (await sender.Send(new GetDownloadLinkQuery(id, version, inline == true), ct)).ToOkResult())
             .WithName("Storage_GetDownloadLink")
             .WithSummary("A short-lived URL to download or show a file without the access token (img, video, PDF viewer).");
+    }
+
+    /// <summary>Storage admins: housekeeping on demand.</summary>
+    public static void MapAdmin(IEndpointRouteBuilder app)
+    {
+        app.MapPost("/maintenance/sweep", async (ISender sender, CancellationToken ct) => (await sender.Send(new SweepCommand(), ct)).ToOkResult())
+            .WithName("Storage_Sweep")
+            .WithSummary("Sweep the tenant now: purge what stayed in the recycle bin too long, abort expired uploads, delete unused blobs.");
     }
 
     /// <summary>

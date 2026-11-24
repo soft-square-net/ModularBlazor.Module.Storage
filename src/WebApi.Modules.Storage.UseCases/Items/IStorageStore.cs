@@ -28,6 +28,21 @@ public interface IStorageStore
     /// <summary>Everything below a folder that is not deleted and not under a deleted folder, by depth.</summary>
     Task<IReadOnlyList<Item>> LiveDescendantsAsync(Item folder, CancellationToken ct);
 
+    /// <summary>Everything below a folder, deleted or not (a purge removes it all).</summary>
+    Task<IReadOnlyList<Item>> SubtreeAsync(Item folder, CancellationToken ct);
+
+    /// <summary>Items deleted themselves (not those only under a deleted folder), newest first; only <paramref name="deletedBy"/>'s when given.</summary>
+    Task<IReadOnlyList<Item>> RecycleBinAsync(string? deletedBy, CancellationToken ct);
+
+    /// <summary>Up to <paramref name="take"/> items deleted before <paramref name="before"/>, oldest first (the bin's retention).</summary>
+    Task<IReadOnlyList<Item>> DeletedBeforeAsync(DateTimeOffset before, int take, CancellationToken ct);
+
+    /// <summary>Up to <paramref name="take"/> blobs no version uses any more.</summary>
+    Task<IReadOnlyList<Blob>> UnusedBlobsAsync(int take, CancellationToken ct);
+
+    /// <summary>Up to <paramref name="take"/> uploads that can no longer be resumed.</summary>
+    Task<IReadOnlyList<UploadSession>> ExpiredUploadsAsync(DateTimeOffset now, int take, CancellationToken ct);
+
     /// <summary>Levels below a folder (0 when it has no subfolders).</summary>
     Task<int> SubtreeHeightAsync(Item folder, CancellationToken ct);
 

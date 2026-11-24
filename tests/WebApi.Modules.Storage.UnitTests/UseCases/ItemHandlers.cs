@@ -115,7 +115,7 @@ public class RenameAndDeleteHandle
         mine.SetAccess(true, [Allow(PrincipalKind.User, "ana", StorageRights.Modify, AceInheritance.None)], "ana", Now);
         var theirs = f.Put(File(root, "theirs.txt", by: "bob"));
 
-        var result = await new DeleteItemsHandler(f.Store, f.Access, f.Caller).Handle(new DeleteItemsCommand([mine.Id, theirs.Id]), Ct);
+        var result = await new DeleteItemsHandler(f.Store, f.Access, f.Caller, f.Purger).Handle(new DeleteItemsCommand([mine.Id, theirs.Id]), Ct);
 
         result.Value.Done.Select(d => d.Id).ShouldBe([mine.Id]);
         result.Value.Failed.Select(d => d.Id).ShouldBe([theirs.Id]);

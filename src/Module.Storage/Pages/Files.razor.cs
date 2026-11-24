@@ -18,6 +18,11 @@ namespace soft.square.net.Module.Storage.Pages;
 public partial class Files : ComponentBase, IAsyncDisposable
 {
     private const string PinnedKey = "storage.explorer.pinned";
+    /// <summary>The recycle bin's place id (not a folder: the API's GET /recycle-bin).</summary>
+    private const string BinId = "recycle-bin";
+    /// <summary>The bin's own commands (hidden in the live tree), and the commands that make no sense in the bin.</summary>
+    private static readonly string[] BinOnly = ["restore", "emptyBin"];
+    private static readonly string[] NotInBin = ["open", "download", "rename", "cut", "copy", "moveTo", "copyTo", "share", "edit", "security", "versions", "pin", "openTab"];
 
     [Inject] private IHttpClientFactory HttpClients { get; set; } = default!;
     [Inject] private MudTailRuntime MudTail { get; set; } = default!;
@@ -64,6 +69,13 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 view = "details",
                 preview = true,
                 renameInPlace = true,
+                // Shown where the deny lists allow them (MudTail hides an entry that an item's or the folder's list names).
+                menuItems = new object[]
+                {
+                    new { id = "restore", label = L["Restore"].Value, icon = "undo" },
+                    new { id = "versions", label = L["Previous versions"].Value, icon = "clock", single = true },
+                    new { id = "emptyBin", label = L["Empty recycle bin"].Value, icon = "delete" },
+                },
             };
             _explorer = await runtime.InvokeAsync<IJSObjectReference>("create", "explorer", _host, options, _self);
             _created.TrySetResult(_explorer);
@@ -138,10 +150,12 @@ public partial class Files : ComponentBase, IAsyncDisposable
     [
         new { id = _roots!.Home.Id.ToString(), name = L["My files"].Value, hasChildren = _roots.Home.HasSubfolders, icon = "home" },
         new { id = _roots.Files.Id.ToString(), name = L["Files"].Value, hasChildren = true, icon = "drive" },
+        new { id = BinId, name = L["Recycle bin"].Value, hasChildren = false, icon = "delete" },
     ];
 
     private async Task<object> ListAsync(JsonElement request)
     {
+        if (Text(request, "folderId") == BinId) return await BinAsync(Text(request, "search")?.Trim());
         var id = Id(request, "folderId") ?? throw new InvalidOperationException(L["This place has no files."]);
         var view = await Api.ListFolderAsync(id);
         var search = Text(request, "search")?.Trim();
@@ -153,6 +167,31 @@ public partial class Files : ComponentBase, IAsyncDisposable
             folder = ToFolder(view.Folder),
             path = view.Path.Select(c => new { id = c.Id.ToString(), name = CrumbName(c) }),
             items = items.Select(i => ToItem(i, view.Folder.Rights)),
+        };
+    }
+
+    /// <summary>The recycle bin as a folder: what the caller deleted, "Date modified" being when it was deleted.</summary>
+    private async Task<object> BinAsync(string? search)
+    {
+        var bin = await Api.GetRecycleBinAsync();
+        var name = L["Recycle bin"].Value;
+        return new
+        {
+            folder = new { id = BinId, name, kind = "folder", @virtual = true, deny = new[] { "newFolder", "upload", "paste", "moveTo", "copyTo" } },
+            path = new[] { new { id = BinId, name } },
+            items = bin.Where(d => string.IsNullOrEmpty(search) || d.Item.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+                .Select(d => new
+                {
+                    id = d.Item.Id.ToString(),
+                    name = d.Item.Name,
+                    kind = d.Item.Kind == ItemKind.Folder ? "folder" : "file",
+                    modified = d.DeletedAt,
+                    created = d.Item.CreatedAt,
+                    size = d.Item.Kind == ItemKind.File ? d.Item.Size : (long?)null,
+                    contentType = d.Item.ContentType,
+                    origin = string.Join(" › ", d.OriginalPath.Select(CrumbName)),
+                    deny = NotInBin,
+                }),
         };
     }
 
@@ -199,6 +238,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
             ? list.EnumerateArray().Select(Picked.From).OfType<Picked>().ToList()
             : [];
         var folder = request.TryGetProperty("folder", out var f) ? Picked.From(f) : null;
+        var inBin = request.TryGetProperty("folder", out var bf) && Text(bf, "id") == BinId;
+        var permanent = request.TryGetProperty("permanent", out var pf) && pf.ValueKind == JsonValueKind.True;
         var target = request.TryGetProperty("target", out var t) ? Picked.From(t) : null;
 
         switch (command)
@@ -220,7 +261,14 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 if (target is null) return false;
                 return await TransferAsync(items, target.Id, copy: command == "copyTo");
             case "delete":
-                return await DeleteAsync(items);
+                return inBin || permanent ? await DeletePermanentlyAsync(items, inBin) : await DeleteAsync(items);
+            case "restore":
+                return await RestoreAsync(items);
+            case "emptyBin":
+                return await EmptyBinAsync(inBin);
+            case "versions":
+                if (items is [{ IsFolder: false } file]) await ShowVersionsAsync(file);
+                return null;
             case "upload":
                 if (folder is null || !request.TryGetProperty("files", out var files)) return false;
                 return await UploadAsync(folder.Id, files);
@@ -257,6 +305,47 @@ public partial class Files : ComponentBase, IAsyncDisposable
         return new { refresh = true };
     }
 
+    /// <summary>Shift+Delete, or Delete in the recycle bin: asks first, as Windows does.</summary>
+    private async Task<object> DeletePermanentlyAsync(List<Picked> items, bool inBin)
+    {
+        if (items.Count == 0) return false;
+        var question = items.Count == 1
+            ? L["Are you sure you want to permanently delete \"{0}\"?", items[0].Name].Value
+            : L["Are you sure you want to permanently delete these {0} items?", items.Count].Value;
+        if (!await ConfirmAsync(question, L["Delete"].Value)) return false;
+        var ids = items.Select(i => i.Id).ToList();
+        var result = inBin
+            ? await Api.PurgeItemsAsync(new PurgeItemsCommand { Ids = ids })
+            : await Api.DeleteItemsAsync(new DeleteItemsCommand { Ids = ids, Permanent = true });
+        await ReportFailuresAsync(result, items);
+        return new { refresh = true };
+    }
+
+    private async Task<object> RestoreAsync(List<Picked> items)
+    {
+        if (items.Count == 0) return false;
+        var result = await Api.RestoreItemsAsync(new RestoreItemsCommand { Ids = items.Select(i => i.Id).ToList() });
+        await ReportFailuresAsync(result, items);
+        if (result.Done.Count > 0)
+        {
+            await MudTail.ToastAsync(result.Done.Count == 1
+                ? L["\"{0}\" was restored to where it was.", result.Done[0].Name].Value
+                : L["{0} items were restored to where they were.", result.Done.Count].Value, "success");
+            if (result.Done.Any(d => d.Kind == ItemKind.Folder))
+                foreach (var place in new[] { _roots!.Home.Id, _roots.Files.Id }) await CallAsync("refreshTree", place.ToString());
+        }
+        return new { refresh = true };
+    }
+
+    private async Task<object> EmptyBinAsync(bool inBin)
+    {
+        if (!await ConfirmAsync(L["Are you sure you want to permanently delete everything in the recycle bin?"].Value, L["Empty recycle bin"].Value))
+            return false;
+        var result = await Api.PurgeItemsAsync(new PurgeItemsCommand { Ids = [] });
+        await ReportFailuresAsync(result, []);
+        return new { refresh = inBin };
+    }
+
     private async Task ReportFailuresAsync(BatchResult result, List<Picked> items)
     {
         foreach (var failure in result.Failed)
@@ -281,6 +370,96 @@ public partial class Files : ComponentBase, IAsyncDisposable
         if (link.Url.IsAbsoluteUri) return link.Url.ToString();
         var gateway = HttpClients.CreateClient(HttpClientNames.WebApi).BaseAddress;
         return gateway is null ? link.Url.ToString() : new Uri(gateway, link.Url).ToString();
+    }
+
+    // ───────── dialogs: confirm, previous versions ─────────
+
+    private sealed record Confirmation(string Question, string Action, TaskCompletionSource<bool> Answer);
+    private Confirmation? _confirm;
+
+    /// <summary>Asks a yes/no question in a modal; true when the user picks <paramref name="action"/>.</summary>
+    private Task<bool> ConfirmAsync(string question, string action)
+    {
+        _confirm?.Answer.TrySetResult(false);
+        _confirm = new Confirmation(question, action, new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
+        StateHasChanged();
+        return _confirm.Answer.Task;
+    }
+
+    private void Answer(bool yes)
+    {
+        var confirm = _confirm;
+        _confirm = null;
+        confirm?.Answer.TrySetResult(yes);
+    }
+
+    private Picked? _versionsOf;
+    private IReadOnlyList<VersionDto> _versions = [];
+    private bool _versionsBusy;
+
+    /// <summary>Opens "Previous versions" for a file: every kept version, newest first; open, restore or delete one.</summary>
+    private async Task ShowVersionsAsync(Picked file)
+    {
+        _versionsOf = file;
+        _versions = [];
+        StateHasChanged();
+        await VersionsDoAsync(() => Api.GetItemAsync(file.Id));
+    }
+
+    private Task RestoreVersionAsync(int number) => VersionsDoAsync(() => Api.RestoreVersionAsync(_versionsOf!.Id, number), refresh: true);
+
+    private async Task DeleteVersionAsync(VersionDto version)
+    {
+        if (!await ConfirmAsync(L["Are you sure you want to permanently delete version {0}?", version.Number].Value, L["Delete"].Value)) return;
+        await VersionsDoAsync(() => Api.DeleteVersionAsync(_versionsOf!.Id, version.Number), refresh: true);
+    }
+
+    private async Task OpenVersionAsync(int number)
+    {
+        try
+        {
+            var link = await Api.GetDownloadLinkAsync(_versionsOf!.Id, number, inline: true);
+            var url = link.Url.IsAbsoluteUri || HttpClients.CreateClient(HttpClientNames.WebApi).BaseAddress is not { } gateway
+                ? link.Url.ToString() : new Uri(gateway, link.Url).ToString();
+            await Js.InvokeVoidAsync("open", url, "_blank", "noopener");
+        }
+        catch (Exception ex) when (ex is StorageApiException or HttpRequestException)
+        {
+            await MudTail.ToastAsync(Describe(ex), "error");
+        }
+    }
+
+    private async Task VersionsDoAsync(Func<Task<ItemDetail>> call, bool refresh = false)
+    {
+        _versionsBusy = true;
+        StateHasChanged();
+        try
+        {
+            var detail = await call();
+            _versions = detail.Versions.OrderByDescending(v => v.Number).ToList();
+            if (refresh) await CallAsync("refresh");
+        }
+        catch (Exception ex) when (ex is StorageApiException or HttpRequestException)
+        {
+            await MudTail.ToastAsync(Describe(ex), "error");
+        }
+        finally
+        {
+            _versionsBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseVersions() => _versionsOf = null;
+
+    /// <summary>"12.3 KB", as the explorer shows sizes (1024-based).</summary>
+    private string SizeText(long bytes)
+    {
+        string[] units = ["bytes", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return unit == 0 ? $"{bytes} {L["bytes"]}" : $"{value:0.#} {units[unit]}";
     }
 
     // ───────── uploads ─────────
@@ -420,6 +599,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
     private static string[] ItemDeny(ItemDto item, int folderRights)
     {
         var deny = new List<string> { "share", "edit", "security" }; // later phases
+        deny.AddRange(BinOnly);
+        if (item.Kind == ItemKind.Folder) deny.Add("versions");
         var removable = item.Role == FolderRole.Normal && (Has(item.Rights, Rights.Delete) || Has(folderRights, Rights.DeleteChildren));
         if (!removable) deny.AddRange(["rename", "delete", "cut", "moveTo"]);
         if (!Has(item.Rights, Rights.ListFolder)) deny.AddRange(["open", "download", "copy", "copyTo"]);
@@ -430,7 +611,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
     /// <summary>What the rights refuse in the open folder.</summary>
     private static string[] FolderDeny(int rights)
     {
-        var deny = new List<string>();
+        var deny = new List<string>(BinOnly);
         if (!Has(rights, Rights.CreateFolders)) deny.Add("newFolder");
         if (!Has(rights, Rights.CreateFiles)) deny.Add("upload");
         if (!Has(rights, Rights.CreateFiles) && !Has(rights, Rights.CreateFolders)) deny.AddRange(["paste", "moveTo", "copyTo"]);

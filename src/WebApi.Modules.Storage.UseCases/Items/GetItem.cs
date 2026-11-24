@@ -11,10 +11,6 @@ public sealed class GetItemHandler(IStorageStore store, ItemAccess access) : IQu
     {
         var reached = await access.ReachAsync(query.Id, StorageRights.ReadAttributes, ct);
         if (!reached.IsSuccess) return reached.As<ItemDetail>();
-        var item = reached.Value.Item;
-        var subfolders = item.IsFolder ? await store.WithSubfoldersAsync([item.Id], ct) : new HashSet<Guid>();
-        var versions = item.Versions.OrderByDescending(v => v.Number)
-            .Select(v => new VersionDto(v.Number, v.Size, v.ContentType, v.CreatedAt, v.CreatedBy)).ToArray();
-        return new ItemDetail(ItemDto.From(item, reached.Value.Rights, subfolders.Contains(item.Id)), ItemViews.Path(reached.Value.Chain), versions);
+        return await ItemDetails.OfAsync(store, reached.Value, ct);
     }
 }
