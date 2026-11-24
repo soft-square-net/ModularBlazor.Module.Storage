@@ -1315,6 +1315,45 @@
         }
       }
     },
+    "/api/storage/events": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "summary": "What happened to folders and files after an event id, oldest first (item.created, file.versioned, item.renamed, item.moved, item.deleted, item.restored, item.purged, file.scanned).",
+        "operationId": "Storage_GetEvents",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "take",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/storage/shares/{tenant}/{token}": {
       "get": {
         "tags": [
@@ -1757,6 +1796,29 @@
           }
         }
       },
+      "EventPage": {
+        "required": [
+          "events",
+          "last",
+          "more"
+        ],
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorageEventDto"
+            }
+          },
+          "last": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        }
+      },
       "FolderRole": {
         "enum": [
           "Normal",
@@ -1788,6 +1850,13 @@
             "items": {
               "$ref": "#/components/schemas/ItemDto"
             }
+          },
+          "publicFolderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -1898,7 +1967,8 @@
           "modifiedBy",
           "version",
           "rights",
-          "hasSubfolders"
+          "hasSubfolders",
+          "scan"
         ],
         "type": "object",
         "properties": {
@@ -1972,6 +2042,16 @@
           },
           "hasSubfolders": {
             "type": "boolean"
+          },
+          "scan": {
+            "$ref": "#/components/schemas/ScanStatus"
+          },
+          "thumbnailUrl": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uri"
           }
         }
       },
@@ -2139,8 +2219,20 @@
           },
           "home": {
             "$ref": "#/components/schemas/ItemDto"
+          },
+          "tenantId": {
+            "type": "string",
+            "default": ""
           }
         }
+      },
+      "ScanStatus": {
+        "enum": [
+          "Clean",
+          "Pending",
+          "Infected"
+        ],
+        "type": "string"
       },
       "SetAclRequest": {
         "required": [
@@ -2496,6 +2588,67 @@
           }
         }
       },
+      "StorageEventDto": {
+        "required": [
+          "id",
+          "type",
+          "itemId",
+          "kind",
+          "name",
+          "parentId",
+          "fileVersion",
+          "by",
+          "at",
+          "detail"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "fileVersion": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "StorageUsage": {
         "required": [
           "used",
@@ -2549,6 +2702,11 @@
           "uploadsExpired": {
             "type": "integer",
             "format": "int32"
+          },
+          "eventsRemoved": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
           }
         }
       },

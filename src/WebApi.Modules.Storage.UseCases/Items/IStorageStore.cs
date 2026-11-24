@@ -1,4 +1,5 @@
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.EventAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.ShareAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate;
@@ -81,6 +82,21 @@ public interface IStorageStore
     Task<ShareLink?> LinkAsync(Guid id, CancellationToken ct);
 
     Task<ShareLink?> LinkByTokenAsync(string token, CancellationToken ct);
+
+    /// <summary>Up to <paramref name="take"/> events after id <paramref name="after"/> that happened by <paramref name="upTo"/>, oldest first.</summary>
+    Task<IReadOnlyList<StorageEvent>> EventsAsync(long after, DateTimeOffset upTo, int take, CancellationToken ct);
+
+    /// <summary>Removes the events that happened before <paramref name="before"/>; returns how many.</summary>
+    Task<int> DeleteEventsBeforeAsync(DateTimeOffset before, CancellationToken ct);
+
+    /// <summary>Up to <paramref name="take"/> blobs waiting for the virus scanner, oldest first.</summary>
+    Task<IReadOnlyList<Blob>> BlobsToScanAsync(int take, CancellationToken ct);
+
+    /// <summary>Up to <paramref name="take"/> clean blobs waiting for a thumbnail, oldest first.</summary>
+    Task<IReadOnlyList<Blob>> BlobsToThumbnailAsync(int take, CancellationToken ct);
+
+    /// <summary>The files (deleted or not) with a version whose bytes are <paramref name="blobKey"/>.</summary>
+    Task<IReadOnlyList<Item>> FilesWithBlobAsync(string blobKey, CancellationToken ct);
 
     void Add<T>(T entity) where T : class;
 

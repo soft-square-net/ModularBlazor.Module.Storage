@@ -19,5 +19,11 @@
     <ArdalisResultVersion>10.1.0</ArdalisResultVersion>
     <MediatorVersion>3.0.2</MediatorVersion>
     <AwsSdkS3Version>4.0.104.11</AwsSdkS3Version>
+    <!--
+      Thumbnails. Six Labors Split License: free for open source and for companies under USD 1M yearly revenue (a free
+      community key), otherwise paid. Release builds need the key: set the SixLaborsLicenseKey environment variable
+      (a CI secret; MSBuild reads it as a property). Never commit the key or a sixlabors.lic file. Debug builds only warn.
+    -->
+    <ImageSharpVersion>4.1.3</ImageSharpVersion>
   </PropertyGroup>
 </Project>

@@ -1,4 +1,6 @@
+using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
 using soft.square.net.WebApi.Modules.Storage.Infrastructure.Blobs;
+using soft.square.net.WebApi.Modules.Storage.UseCases.Processing;
 
 namespace soft.square.net.WebApi.Modules.Storage.IntegrationTests;
 
@@ -58,8 +60,23 @@ public sealed class FileSystemBlobStoreTests : IDisposable
     [InlineData("../secret")]
     [InlineData("t/acme/2026/11/../../../../x")]
     [InlineData("t/ACME/2026/11/0123")]
+    [InlineData("t/acme/2026/11/0123456789abcdef0123456789abcdef.thumb.webp.exe")]
     public async Task RefusesKeysItDidNotMake(string key) =>
         await Should.ThrowAsync<ArgumentException>(() => _store.OpenAsync(key, Ct));
+
+    [Fact]
+    public async Task KeepsAThumbnailNextToItsBlob()
+    {
+        var thumbnail = Blob.Create(Key, "", 5, DateTimeOffset.UtcNow).ThumbnailKey;
+
+        await BlobWrites.PutAsync(_store, thumbnail, "image/webp", [1, 2, 3], Ct);
+
+        var content = await _store.OpenAsync(thumbnail, Ct);
+        content.ShouldNotBeNull();
+        await using (content.Stream) content.Length.ShouldBe(3);
+        await _store.DeleteAsync(thumbnail, Ct);
+        (await _store.OpenAsync(thumbnail, Ct)).ShouldBeNull();
+    }
 
     [Fact]
     public async Task AMissingBlobIsNull() => (await _store.OpenAsync(Key, Ct)).ShouldBeNull();

@@ -36,6 +36,16 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                         .IsConcurrencyToken()
                         .HasColumnType("int");
 
+                    b.Property<string>("Scan")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("Clean");
+
+                    b.Property<DateTime?>("ScannedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<long>("Size")
                         .HasColumnType("bigint");
 
@@ -44,11 +54,82 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
+                    b.Property<string>("Threat")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Thumbnail")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("None");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Scan");
 
                     b.HasIndex("TenantId");
 
+                    b.HasIndex("Thumbnail");
+
                     b.ToTable("storage_blobs", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.EventAggregate.StorageEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("By")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<int?>("FileVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("storage_events", (string)null);
                 });
 
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate.StorageGroup", b =>

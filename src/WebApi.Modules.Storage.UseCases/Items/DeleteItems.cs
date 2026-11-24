@@ -25,7 +25,7 @@ public sealed class DeleteItemsHandler(IStorageStore store, ItemAccess access, S
                 reached.Value.Item.Delete(caller.UserId, caller.Now);
                 await store.SaveAsync(ct);
                 done.Add(ItemDto.From(reached.Value.Item, reached.Value.Rights));
-                if (command.Permanent) await purger.PurgeAsync(reached.Value.Item, ct);
+                if (command.Permanent) await purger.PurgeAsync(reached.Value.Item, caller.UserId, ct);
             }
             catch (DomainException e) { failed.Add(new BatchFailure(id, e.Message)); }
         }

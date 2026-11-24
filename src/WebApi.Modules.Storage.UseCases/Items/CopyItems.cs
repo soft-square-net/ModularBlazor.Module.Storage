@@ -84,6 +84,7 @@ public sealed class CopyItemsHandler(IStorageStore store, ItemAccess access, Sto
     {
         if (source.IsFolder) return Item.CreateFolder(parent, name, by, now);
         var current = source.Current ?? throw new DomainException($"'{source.Name}' has no content.");
-        return Item.CreateFile(parent, name, by, FileVersion.Create(current.BlobKey, current.Size, current.ContentType, by, now), now);
+        // Same bytes, same verdict: a copy of a file waiting for its scan waits too.
+        return Item.CreateFile(parent, name, by, FileVersion.Create(current.BlobKey, current.Size, current.ContentType, by, now), now, source.Scan);
     }
 }

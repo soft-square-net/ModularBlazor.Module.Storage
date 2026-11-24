@@ -18,6 +18,8 @@ public sealed class CreateShareLinkHandler(IStorageStore store, ItemAccess acces
     {
         var reached = await access.ReachAsync(command.Id, StorageRights.Share, ct);
         if (!reached.IsSuccess) return reached.As<ShareLinkDto>();
+        if (!reached.Value.Item.IsFolder && reached.Value.Item.Scan != ScanStatus.Clean)
+            return Result<ShareLinkDto>.Conflict(FileVersions.NotSafe(reached.Value.Item.Name, reached.Value.Item.Scan, null));
         if ((await store.LinksOfAsync(command.Id, ct)).Count >= MaxLinksPerItem)
             return Result<ShareLinkDto>.Conflict($"An item can have at most {MaxLinksPerItem} links; remove one first.");
         var link = ShareLink.Create(command.Id, caller.UserId, command.ExpiresAt, command.Password, command.MaxDownloads, caller.Now);
@@ -102,6 +104,8 @@ public sealed class OpenSharedFileHandler(IStorageStore store, IBlobStores store
         var (link, _, chain) = opened.Value;
         var file = chain[^1];
         if (file.IsFolder || file.Current is not { } version) return Result<DownloadLink>.Invalid(new ValidationError("A folder has no content to download."));
+        var safe = await FileVersions.SafeAsync(store, file, version, ct);
+        if (!safe.IsSuccess) return safe.As<DownloadLink>(); // not counted
         link.CountDownload();
         await store.SaveAsync(ct);
         var lifetime = options.Value.DownloadLinkLifetime;
@@ -122,6 +126,7 @@ public sealed class OpenPublicFileHandler(IStorageStore store, IBlobStores store
         // Not found whether it is missing, private or deleted: a public URL tells nothing about private files.
         if (chain is null || chain.Any(i => i.IsDeleted) || chain[^1].IsFolder || !chain.Any(i => i.IsPublic) || chain[^1].Current is not { } version)
             return Result<DownloadLink>.NotFound("Not found.");
+        if (!(await FileVersions.SafeAsync(store, chain[^1], version, ct)).IsSuccess) return Result<DownloadLink>.NotFound("Not found.");
         var lifetime = options.Value.DownloadLinkLifetime;
         var url = await FileVersions.LinkAsync(store, stores, tickets, tenant.Required.Id, chain[^1], version, true, lifetime, ct);
         return new DownloadLink(url, clock.GetUtcNow() + lifetime);

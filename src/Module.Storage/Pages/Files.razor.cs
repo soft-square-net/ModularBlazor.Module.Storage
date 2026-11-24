@@ -605,8 +605,14 @@ public partial class Files : ComponentBase, IAsyncDisposable
         contentType = item.ContentType,
         hasChildren = item.HasSubfolders,
         version = item.Version,
+        thumbnail = item.ThumbnailUrl?.ToString(),
+        properties = item.Scan == ScanStatus.Clean ? null : new[] { new { label = L["Virus check"].Value, value = ScanText(item.Scan) } },
         deny = ItemDeny(item, folderRights),
     };
+
+    private string ScanText(ScanStatus scan) => scan == ScanStatus.Infected
+        ? L["Infected: quarantined"].Value
+        : L["Waiting for the virus check"].Value;
 
     private string NameOf(ItemDto item) => DisplayName(item.Id, item.Role, item.Name);
 
@@ -633,6 +639,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
         if (!removable) deny.AddRange(["rename", "delete", "cut", "moveTo"]);
         if (!Has(item.Rights, Rights.ListFolder)) deny.AddRange(["open", "download", "copy", "copyTo"]);
         if (item.Kind == ItemKind.Folder) deny.Add("download");
+        // Not scanned yet, or infected: nothing hands its bytes out (the server refuses too).
+        if (item.Kind == ItemKind.File && item.Scan != ScanStatus.Clean) deny.AddRange(["open", "download", "share"]); // Previous versions stays: restoring a clean one recovers the file
         return [.. deny.Distinct()];
     }
 

@@ -39,6 +39,16 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                         .IsConcurrencyToken()
                         .HasColumnType("NUMBER(10)");
 
+                    b.Property<string>("Scan")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("NVARCHAR2(20)")
+                        .HasDefaultValue("Clean");
+
+                    b.Property<DateTimeOffset?>("ScannedAt")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
                     b.Property<long>("Size")
                         .HasColumnType("NUMBER(19)");
 
@@ -47,11 +57,84 @@ namespace soft.square.net.WebApi.Modules.Storage.Infrastructure.Data.Migrations.
                         .HasMaxLength(64)
                         .HasColumnType("NVARCHAR2(64)");
 
+                    b.Property<string>("Threat")
+                        .HasMaxLength(200)
+                        .HasColumnType("NVARCHAR2(200)");
+
+                    b.Property<string>("Thumbnail")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("NVARCHAR2(20)")
+                        .HasDefaultValue("None");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Scan");
 
                     b.HasIndex("TenantId");
 
+                    b.HasIndex("Thumbnail");
+
                     b.ToTable("storage_blobs", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.EventAggregate.StorageEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("NUMBER(19)");
+
+                    OraclePropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
+
+                    b.Property<string>("By")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("NVARCHAR2(128)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(500)
+                        .HasColumnType("NVARCHAR2(500)");
+
+                    b.Property<int?>("FileVersion")
+                        .HasColumnType("NUMBER(10)");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("NVARCHAR2(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("NVARCHAR2(255)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("RAW(16)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("NVARCHAR2(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("storage_events", (string)null);
                 });
 
             modelBuilder.Entity("soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate.StorageGroup", b =>

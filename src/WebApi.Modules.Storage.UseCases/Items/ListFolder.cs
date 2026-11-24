@@ -5,7 +5,7 @@ namespace soft.square.net.WebApi.Modules.Storage.UseCases.Items;
 /// <summary>Opens a folder: its items that the caller has any right on (access-based enumeration), folders first.</summary>
 public sealed record ListFolderQuery(Guid FolderId) : IQuery<Result<FolderView>>;
 
-public sealed class ListFolderHandler(IStorageStore store, ItemAccess access) : IQueryHandler<ListFolderQuery, Result<FolderView>>
+public sealed class ListFolderHandler(IStorageStore store, ItemAccess access, ThumbnailLinks thumbnails) : IQueryHandler<ListFolderQuery, Result<FolderView>>
 {
     public async ValueTask<Result<FolderView>> Handle(ListFolderQuery query, CancellationToken ct)
     {
@@ -22,11 +22,13 @@ public sealed class ListFolderHandler(IStorageStore store, ItemAccess access) : 
         }
         var subfolders = await store.WithSubfoldersAsync(visible.Where(v => v.Item.IsFolder).Select(v => v.Item.Id).ToArray(), ct);
 
-        var items = visible
+        var sorted = visible
             .OrderBy(v => v.Item.IsFolder ? 0 : 1).ThenBy(v => v.Item.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(v => ItemDto.From(v.Item, v.Rights, subfolders.Contains(v.Item.Id)))
             .ToArray();
-        return new FolderView(ItemDto.From(folder.Item, folder.Rights, items.Any(i => i.Kind == ItemKind.Folder)), ItemViews.Path(folder.Chain), items);
+        var items = await thumbnails.AddAsync(sorted.Select(v => v.Item).ToArray(),
+            sorted.Select(v => ItemDto.From(v.Item, v.Rights, subfolders.Contains(v.Item.Id))).ToArray(), ct);
+        return new FolderView(ItemDto.From(folder.Item, folder.Rights, items.Any(i => i.Kind == ItemKind.Folder)), ItemViews.Path(folder.Chain), items,
+            folder.Chain.LastOrDefault(i => i.IsPublic)?.Id);
     }
 }
 

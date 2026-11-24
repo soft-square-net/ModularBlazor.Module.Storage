@@ -17,8 +17,10 @@ public sealed class RestoreVersionHandler(IStorageStore store, ItemAccess access
         var item = reached.Value.Item;
         if (item.IsFolder || item.Versions.All(v => v.Number != command.Number)) return Result<ItemDetail>.NotFound($"'{item.Name}' has no version {command.Number}.");
 
-        var restored = item.RestoreVersion(command.Number, caller.UserId, caller.Now);
-        foreach (var blob in await store.BlobsAsync([restored.BlobKey], ct)) blob.AddReference();
+        var key = item.Versions.First(v => v.Number == command.Number).BlobKey;
+        var blobs = await store.BlobsAsync([key], ct);
+        var restored = item.RestoreVersion(command.Number, caller.UserId, caller.Now, blobs.FirstOrDefault()?.Scan ?? ScanStatus.Clean);
+        foreach (var blob in blobs) blob.AddReference();
         await store.SaveAsync(ct);
         return await ItemDetails.OfAsync(store, reached.Value, ct);
     }

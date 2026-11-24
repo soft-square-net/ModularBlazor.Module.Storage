@@ -338,6 +338,14 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
+        /// What happened to folders and files after an event id, oldest first (item.created, file.versioned, item.renamed, item.moved, item.deleted, item.restored, item.purged, file.scanned).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<EventPage> GetEventsAsync(long? after = null, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
         /// Open a share link (anonymous): the shared file, or a folder of the shared tree. 401 when it needs a password (header X-Share-Password).
         /// </summary>
         /// <returns>OK</returns>
@@ -3478,6 +3486,90 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <summary>
+        /// What happened to folders and files after an event id, oldest first (item.created, file.versioned, item.renamed, item.moved, item.deleted, item.restored, item.purged, file.scanned).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="StorageApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<EventPage> GetEventsAsync(long? after = null, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/storage/events"
+                    urlBuilder_.Append("api/storage/events");
+                    urlBuilder_.Append('?');
+                    if (after != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("after")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(after, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
+                    if (take != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("take")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(take, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
+                    urlBuilder_.Length--;
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<EventPage>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new StorageApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new StorageApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
         /// Open a share link (anonymous): the shared file, or a folder of the shared tree. 401 when it needs a password (header X-Share-Password).
         /// </summary>
         /// <returns>OK</returns>
@@ -4146,6 +4238,31 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class EventPage
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("events")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<StorageEventDto> Events { get; set; } = new System.Collections.Generic.List<StorageEventDto>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("last")]
+        public long Last { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("more")]
+        public bool More { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum FolderRole
     {
 
@@ -4178,6 +4295,9 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
         [System.Text.Json.Serialization.JsonPropertyName("items")]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.IReadOnlyList<ItemDto> Items { get; set; } = new System.Collections.Generic.List<ItemDto>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("publicFolderId")]
+        public System.Guid? PublicFolderId { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -4343,6 +4463,14 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         [System.Text.Json.Serialization.JsonPropertyName("hasSubfolders")]
         public bool HasSubfolders { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("scan")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ScanStatus>))]
+        public ScanStatus Scan { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("thumbnailUrl")]
+        public System.Uri? ThumbnailUrl { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -4554,6 +4682,9 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
         [System.ComponentModel.DataAnnotations.Required]
         public ItemDto Home { get; set; } = new ItemDto();
 
+        [System.Text.Json.Serialization.JsonPropertyName("tenantId")]
+        public string? TenantId { get; set; } = "";
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -4562,6 +4693,21 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
             get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
             set { _additionalProperties = value; }
         }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public enum ScanStatus
+    {
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Clean")]
+        Clean = 0,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Pending")]
+        Pending = 1,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Infected")]
+        Infected = 2,
 
     }
 
@@ -4938,6 +5084,58 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class StorageEventDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        public long Id { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("type")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Type { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("itemId")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid ItemId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("kind")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ItemKind>))]
+        public ItemKind Kind { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Name { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("parentId")]
+        public System.Guid? ParentId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("fileVersion")]
+        public int? FileVersion { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("by")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string By { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("at")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset At { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("detail")]
+        public string? Detail { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class StorageUsage
     {
 
@@ -4976,6 +5174,9 @@ namespace soft.square.net.WebApi.Modules.Storage.Client
 
         [System.Text.Json.Serialization.JsonPropertyName("uploadsExpired")]
         public int UploadsExpired { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("eventsRemoved")]
+        public int? EventsRemoved { get; set; } = 0;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

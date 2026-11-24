@@ -58,7 +58,7 @@ public class ListFolderHandlerHandle
         f.Put(Folder(root, "Secret"));
         var file = f.Put(File(root, "mine.txt", by: "ana"));
 
-        var result = await new ListFolderHandler(f.Store, f.Access).Handle(new ListFolderQuery(root.Id), Ct);
+        var result = await new ListFolderHandler(f.Store, f.Access, f.Thumbnails).Handle(new ListFolderQuery(root.Id), Ct);
 
         result.IsSuccess.ShouldBeTrue();
         result.Value.Items.Select(i => i.Name).ShouldBe(["Open", "mine.txt"]); // folders first; owner sees their own file
@@ -72,7 +72,7 @@ public class ListFolderHandlerHandle
         var root = f.Put(Root());
         f.Put(Folder(root, "Secret"));
 
-        var result = await new ListFolderHandler(f.Store, f.Access).Handle(new ListFolderQuery(root.Id), Ct);
+        var result = await new ListFolderHandler(f.Store, f.Access, f.Thumbnails).Handle(new ListFolderQuery(root.Id), Ct);
 
         result.Value.Items.Single().Rights.ShouldBe((int)StorageRights.FullControl);
     }
@@ -86,7 +86,7 @@ public class ListFolderHandlerHandle
         var b = f.Put(Folder(a, "b"));
         a.Delete("ana", Now);
 
-        (await new ListFolderHandler(f.Store, f.Access).Handle(new ListFolderQuery(b.Id), Ct)).Status.ShouldBe(ResultStatus.NotFound);
+        (await new ListFolderHandler(f.Store, f.Access, f.Thumbnails).Handle(new ListFolderQuery(b.Id), Ct)).Status.ShouldBe(ResultStatus.NotFound);
     }
 }
 

@@ -4,13 +4,14 @@ Storage: the tenant's files and folders, with NTFS-style access control, behind 
 module of the [ModularBlazor](https://github.com/soft-square-net/ModularBlazor.Platform) platform, released on its own
 as the bundle `storage`.
 
-> **Status: phase 6 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
+> **Status: phase 7 of 7.** The API, the data model, the access control, the blob stores (the local disk, S3 and MinIO
 > through named connections, with presigned downloads and per-tenant quotas), the Files page (the Explorer: browsing,
 > new folders, rename, cut/copy/paste and drag to move, delete, uploads of files and folders, downloads, image previews),
 > the recycle bin, previous versions, the sweeper (purging old deletions, unused blobs and abandoned uploads) and sharing
-> (with people, by links, public folders) are in.
+> (with people, by links, public folders), and the integration points (the file and folder pickers for other modules,
+> the change feed for Elsa, thumbnails, virus scanning with ClamAV) are in.
 > The Explorer needs MudTail's explorer component, on the platform's `feat/mudtail-explorer` branch. The Security
-> dialog and the image editor and the integration points (phase 7) come next. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
+> dialog and the image editor are not built yet. Nothing here is packed as a bundle yet: build it and upload the entry project's output in the admin area.
 
 ## Layout
 
@@ -65,6 +66,17 @@ playground/    Aspire AppHost: the platform (from a Platform checkout) with this
   expiry, password (PBKDF2; sent in the `X-Share-Password` header, never in a URL) and download limit; revocable,
   at most 20 per item. *Public folders*: everything in (and below) a public folder has a stable anonymous address,
   `/api/storage/public/{tenant}/{fileId}/{name}`, for Content's published pages.
+- **Virus scanning** (when `Storage:ClamAV:Host` is set): a new upload is *pending* until clamd has checked it, in the
+  background. Until it is clean a file is listed (with its state) but cannot be downloaded, previewed, linked, shared by
+  a link or served from a public folder. An infected file stays quarantined until someone deletes it; restoring a clean
+  previous version recovers it. When clamd cannot be reached, files wait; without a scanner configured (or after it is
+  removed) files are clean at once. The verdict belongs to the blob, so copies and versions sharing it share it.
+- **Thumbnails:** clean JPEG, PNG, GIF, WebP, BMP and TIFF files (up to `Storage:ThumbnailMaxBytes`) get a WebP
+  thumbnail in the background (ImageSharp), stored next to the blob (`{key}.thumb.webp`) and deleted with it. Listings
+  carry a short-lived `thumbnailUrl`.
+- **The change feed** (an outbox, `storage.events`): every create, new version, rename, move, delete, restore, purge
+  and scan verdict is a row written in the same transaction as the change, kept `Storage:EventRetentionDays`. Elsa (or
+  anything else) reads it with `GET /events?after={last id}`.
 
 ## API
 
@@ -99,6 +111,15 @@ Under `/api/storage`, tenant-bound (header `X-Tenant`, the host name or the toke
 | `POST /items/{id}/sharing/people`, `DELETE /items/{id}/sharing/people/{userId}` | Share with people (`View` or `Edit`), stop sharing |
 | `PUT /items/{id}/sharing/public` | Make a folder public, or not (`Share` and `ChangePermissions`) |
 | `POST /items/{id}/sharing/links`, `DELETE /sharing/links/{linkId}` | Create a link (expiry, password, download limit), remove one |
+| `GET /events?after=&take=` (`storage.events` or `storage.admin`) | The change feed: events after an id, oldest first (`take` up to 500, default 100), `last` (the id to ask after next) and `more`. The newest `Storage:EventDelay` is held back, so a slower transaction's event is never skipped |
+
+Downloads, links, share links and public addresses of a file that is not clean answer 409 (404 for public addresses).
+
+The change feed's events are `{ id, type, itemId, kind, name, parentId, fileVersion, by, at, detail }`, with `type` one
+of `item.created`, `file.versioned`, `item.renamed` (detail: the old name), `item.moved` (detail: the old folder's id),
+`item.deleted`, `item.restored`, `item.purged` (detail: how many items went), `file.scanned` (detail: `clean` or
+`infected: {threat}`). For Elsa, give its client the platform permission `storage.events` in the tenant and poll with a
+client-credentials token and `X-Tenant`, keeping `last`.
 
 Anonymous (no token; the tenant is in the URL):
 
@@ -118,6 +139,10 @@ written to the module catalog, so keys and secrets belong there):
 | --- | --- |
 | `Storage:MaxFileSize`, `Storage:ChunkSize`, `Storage:UploadLifetime`, `Storage:DownloadLinkLifetime`, `Storage:MaxCopyItems` | Limits and lifetimes |
 | `Storage:RecycleBinDays` | Days a deleted item stays in the recycle bin before the sweeper purges it (default 30; 0 keeps everything) |
+| `Storage:EventRetentionDays`, `Storage:EventDelay` | How long the change feed keeps events (default 7 days; the sweeper removes older ones) and how much of its newest end it holds back (default `00:00:05`) |
+| `Storage:ProcessInterval` | How often every active tenant's pending scans and thumbnails are looked for (default `00:01:00`); new uploads are processed at once |
+| `Storage:ThumbnailSize`, `Storage:ThumbnailMaxBytes` | The thumbnails' longest side (default 320) and the largest image given one (default 50 MiB) |
+| `Storage:ClamAV:Host`, `:Port`, `:Timeout` | clamd (empty host: no scanning; port 3310; timeout per file `00:02:00`). Set clamd's `StreamMaxLength` to at least `Storage:MaxFileSize`, or big files are reported as errors and wait |
 | `Storage:SweepInterval` | How often every active tenant is swept (default `01:00:00`, the first a minute after the module loads; `00:00:00` turns it off). Every replica sweeps; a sweep is safe to run twice |
 | `Storage:Local:Root` | The local disk (default `%LocalAppData%/ModularBlazor/storage`); every replica must see the same folder |
 | `Storage:Connections:{name}:Kind` | `S3` (default) or `Local` |
@@ -146,7 +171,24 @@ Modules__Settings__storage__Storage__Tenants__acme__Quota=10737418240
 
 Removing a connection that blobs were written to makes those files unreadable (the error names the connection).
 
+## Pickers for other modules
+
+Other modules open Storage's dialogs through `IModuleDialogs` (the result is web JSON; null when cancelled). Keep the
+file's id and the snapshot: names change, the id does not.
+
+| Dialog | Parameters | Result |
+| --- | --- | --- |
+| `Module.Storage/pick-files` | `{ multiple?, accept?: [".pdf", "image/*", "text/plain"], folderId?, publicOnly? }` | `{ ids, files: [{ id, name, size, contentType, version, folderId, publicUrl }] }` |
+| `Module.Storage/pick-folder` | `{ folderId?, rights?: "create" \| "read" }` (default `create`: the caller may add files) | `{ id, name, path: [{ id, name }], publicFolder }` |
+
+Files that are pending or infected cannot be chosen. `publicOnly` offers only files in public folders, and `publicUrl`
+is their anonymous address (null elsewhere), for published pages.
+
 ## Building
+
+Thumbnails use SixLabors.ImageSharp 4, which needs a licence key at build time: set the `SixLaborsLicenseKey`
+environment variable (a CI secret). Debug builds only warn without it; Release builds fail. Never commit the key or a
+`sixlabors.lic` file.
 
 ```bash
 dotnet build
@@ -213,6 +255,9 @@ folder. Pinned folders (Quick access) are kept in the browser. Security and Edit
 dialog: add people by name or email with view or edit access, change or remove it; create links (each is copied when
 made) and remove them; make a folder public, or copy a file's public address when it is in a public folder.
 **Shared with me** is a place in the navigation pane listing what others shared with the caller by name.
+
+Images show their **thumbnails** in the large icon views, and a file that is waiting for the virus check or infected
+says so in the details pane; it cannot be opened, downloaded or shared until it is clean.
 
 The **Recycle bin** is a place in the navigation pane: Date modified is when the item was deleted; Restore puts the
 selection back, Delete purges it, and Empty recycle bin purges everything the caller can see, each after asking.

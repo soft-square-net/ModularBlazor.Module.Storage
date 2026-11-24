@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using soft.square.net.WebApi.Contracts.Tenancy;
 using soft.square.net.WebApi.Data;
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.EventAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
@@ -26,6 +27,7 @@ public sealed class StorageDbContext(DbContextOptions<StorageDbContext> options,
     public DbSet<UploadSession> Uploads => Set<UploadSession>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
     public DbSet<StoragePerson> People => Set<StoragePerson>();
+    public DbSet<StorageEvent> Events => Set<StorageEvent>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {

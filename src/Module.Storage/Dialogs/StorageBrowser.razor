@@ -1,0 +1,73 @@
+@*
+  The browsing part of the pickers (pick-files, pick-folder): places (My files, Files, Shared with me), the path, and
+  the open folder's items, filtered by a search box. Folders open on a click; files are offered through Refuse (null:
+  can be chosen) and reported with OnFile. Styles: st-pick- classes in storage.css (the dialog shows on other modules'
+  pages too).
+*@
+
+<div class="st-picker">
+  <div class="st-pick-places" role="tablist" aria-label="@L["Places"]">
+    <button type="button" role="tab" class="st-pick-place @(_place == Place.Home ? "is-on" : "")" aria-selected="@(_place == Place.Home)" @onclick="() => GoToAsync(Place.Home)">@L["My files"]</button>
+    <button type="button" role="tab" class="st-pick-place @(_place == Place.Files ? "is-on" : "")" aria-selected="@(_place == Place.Files)" @onclick="() => GoToAsync(Place.Files)">@L["Files"]</button>
+    <button type="button" role="tab" class="st-pick-place @(_place == Place.Shared ? "is-on" : "")" aria-selected="@(_place == Place.Shared)" @onclick="() => GoToAsync(Place.Shared)">@L["Shared with me"]</button>
+  </div>
+
+  <div class="st-pick-bar">
+    <nav class="st-pick-crumbs" aria-label="@L["Path"]">
+      @if (_place == Place.Shared && View is null)
+      {
+        <span aria-current="page">@L["Shared with me"]</span>
+      }
+      else if (View is { } view)
+      {
+        @for (var i = 0; i < view.Path.Count; i++)
+        {
+          var crumb = view.Path[i];
+          if (i > 0) { <span class="st-pick-sep" aria-hidden="true">›</span> }
+          if (i == view.Path.Count - 1 || crumb.Role == FolderRole.Homes) { <span aria-current="@(i == view.Path.Count - 1 ? "page" : null)">@CrumbName(crumb)</span> }
+          else { <button type="button" class="st-pick-crumb" @onclick="() => OpenAsync(crumb.Id)">@CrumbName(crumb)</button> }
+        }
+      }
+    </nav>
+    <div class="mud-input-wrapper mud-input-wrapper--dense st-pick-search">
+      <input type="search" class="mud-input-slot" @bind="_search" @bind:event="oninput" placeholder="@L["Search this folder"]" aria-label="@L["Search this folder"]" />
+    </div>
+  </div>
+
+  @if (_error is not null)
+  {
+    <p class="st-pick-error" role="alert">@_error</p>
+  }
+
+  <ul class="st-pick-list" role="listbox" aria-multiselectable="@(Multiple ? "true" : "false")" aria-busy="@(_loading ? "true" : "false")">
+    @foreach (var item in Visible())
+    {
+      var it = item;
+      if (it.Kind == ItemKind.Folder)
+      {
+        <li class="st-pick-row st-pick-folder" role="option" aria-selected="false" @onclick="() => OpenAsync(it.Id)" title="@L["Open"]">
+          <span class="st-pick-icon" aria-hidden="true">📁</span>
+          <span class="st-pick-name">@NameOf(it)</span>
+          <span class="st-pick-meta"><bdi>@it.ModifiedAt.ToLocalTime().ToString("g")</bdi></span>
+        </li>
+      }
+      else if (FilesShown)
+      {
+        var refused = Refuse?.Invoke(it, View);
+        var on = Selected.Contains(it.Id);
+        <li class="st-pick-row @(on ? "is-on" : "") @(refused is null ? "" : "is-off")" role="option" aria-selected="@(on ? "true" : "false")"
+            aria-disabled="@(refused is null ? "false" : "true")" title="@refused" @onclick="() => FileAsync(it, refused)">
+          @if (Multiple) { <input type="checkbox" checked="@on" disabled="@(refused is not null)" tabindex="-1" aria-hidden="true" /> }
+          @if (it.ThumbnailUrl is { } thumb) { <img class="st-pick-thumb" src="@thumb" alt="" loading="lazy" /> }
+          else { <span class="st-pick-icon" aria-hidden="true">📄</span> }
+          <span class="st-pick-name">@it.Name</span>
+          <span class="st-pick-meta"><bdi>@SizeText(it.Size)</bdi> · <bdi>@it.ModifiedAt.ToLocalTime().ToString("g")</bdi></span>
+        </li>
+      }
+    }
+  </ul>
+  @if (!_loading && !Visible().Any())
+  {
+    <p class="st-pick-empty">@(_search.Trim().Length > 0 ? L["Nothing matches \"{0}\".", _search.Trim()] : L["This folder is empty."])</p>
+  }
+</div>

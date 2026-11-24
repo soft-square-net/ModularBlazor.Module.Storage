@@ -104,7 +104,7 @@ public sealed class PurgeItemsHandler(IStorageStore store, StorageCaller caller,
             var item = bin.Value.Chain[^1];
             if (!admin && item.DeletedBy != caller.UserId) { failed.Add(new BatchFailure(id, StorageMessages.Denied)); continue; }
             var dto = ItemDto.From(item, bin.Value.Rights);
-            await purger.PurgeAsync(item, ct);
+            await purger.PurgeAsync(item, caller.UserId, ct);
             done.Add(dto);
         }
         await purger.DeleteUnusedBlobsAsync(ct);
@@ -131,16 +131,17 @@ internal static class RecycleBinEntry
 /// any more is deleted from its store, then forgotten. A blob whose bytes cannot be deleted (the store is down) stays
 /// unused and the next sweep tries again.
 /// </summary>
-public sealed class Purger(IStorageStore store, IBlobStores stores, ILoggerFactory loggers)
+public sealed class Purger(IStorageStore store, IBlobStores stores, TimeProvider clock, ILoggerFactory loggers)
 {
     public const int Batch = 200;
 
     private readonly ILogger _log = loggers.CreateLogger("soft.square.net.WebApi.Modules.Storage.UseCases.Purger");
 
-    /// <summary>Removes the item and everything below it (deleted or not), in one save.</summary>
-    public async Task<int> PurgeAsync(Item item, CancellationToken ct)
+    /// <summary>Removes the item and everything below it (deleted or not), in one save; <paramref name="by"/> is who (or "system").</summary>
+    public async Task<int> PurgeAsync(Item item, string by, CancellationToken ct)
     {
         var items = item.IsFolder ? [item, .. await store.SubtreeAsync(item, ct)] : new List<Item> { item };
+        item.Purged(items.Count, by, clock.GetUtcNow());
         var keys = items.Where(i => !i.IsFolder).SelectMany(i => i.Versions).Select(v => v.BlobKey).ToList();
         var blobs = (await store.BlobsAsync(keys.Distinct().ToArray(), ct)).ToDictionary(b => b.Id);
         foreach (var key in keys)
@@ -172,7 +173,16 @@ public sealed class Purger(IStorageStore store, IBlobStores stores, ILoggerFacto
             {
                 try
                 {
-                    await stores.Get(blob.Location ?? "").DeleteAsync(blob.Id, ct);
+                    var blobStore = stores.Get(blob.Location ?? "");
+                    await blobStore.DeleteAsync(blob.Id, ct);
+                    if (blob.Thumbnail == ThumbnailState.Ready)
+                    {
+                        try { await blobStore.DeleteAsync(blob.ThumbnailKey, ct); }
+                        catch (Exception e) when (e is not OperationCanceledException)
+                        {
+                            _log.LogWarning(e, "Storage: could not delete the thumbnail of blob {Blob}; it stays in the store.", blob.Id);
+                        }
+                    }
                     deleted.Add(blob);
                 }
                 catch (Exception e) when (e is not OperationCanceledException)

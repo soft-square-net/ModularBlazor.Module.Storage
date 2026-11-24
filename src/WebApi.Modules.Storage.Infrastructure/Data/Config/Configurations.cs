@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using soft.square.net.WebApi.Modules.Storage.Core.AccessControl;
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.EventAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.Common;
 using soft.square.net.WebApi.Modules.Storage.Core.GroupAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
@@ -99,6 +100,13 @@ public sealed class BlobConfiguration : IEntityTypeConfiguration<Blob>
         blob.Property(b => b.Id).HasMaxLength(FileVersion.BlobKeyLength).ValueGeneratedNever();
         blob.Property(b => b.Location).HasMaxLength(Blob.LocationLength);
         blob.Property(b => b.References).IsConcurrencyToken();
+        // Existing rows (before scanning and thumbnails) are clean and have none.
+        blob.Property(b => b.Scan).HasConversion<string>().HasMaxLength(DataSchemaConstants.EnumLength).HasDefaultValue(ScanStatus.Clean);
+        blob.Property(b => b.Thumbnail).HasConversion<string>().HasMaxLength(DataSchemaConstants.EnumLength).HasDefaultValue(ThumbnailState.None);
+        blob.Property(b => b.Threat).HasMaxLength(Blob.ThreatLength);
+        // The processor's queues.
+        blob.HasIndex(b => b.Scan);
+        blob.HasIndex(b => b.Thumbnail);
     }
 }
 
@@ -133,6 +141,21 @@ public sealed class ShareLinkConfiguration : IEntityTypeConfiguration<ShareLink>
         link.Property(l => l.Version).IsConcurrencyToken();
         link.HasIndex(l => l.Token).IsUnique();
         link.HasIndex(l => l.ItemId);
+    }
+}
+
+public sealed class StorageEventConfiguration : IEntityTypeConfiguration<StorageEvent>
+{
+    public void Configure(EntityTypeBuilder<StorageEvent> e)
+    {
+        e.ToTable("events");
+        e.Property(x => x.Id).ValueGeneratedOnAdd();
+        e.Property(x => x.Type).HasMaxLength(StorageEvent.TypeLength);
+        e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(DataSchemaConstants.EnumLength);
+        e.Property(x => x.Name).HasMaxLength(ItemNames.MaxLength);
+        e.Property(x => x.By).HasMaxLength(Item.UserIdLength);
+        e.Property(x => x.Detail).HasMaxLength(StorageEvent.DetailLength);
+        e.HasIndex(x => x.At); // retention
     }
 }
 

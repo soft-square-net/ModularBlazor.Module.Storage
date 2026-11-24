@@ -5,6 +5,7 @@ using soft.square.net.WebApi.Modules.Storage.Core.UploadAggregate;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Access;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Blobs;
 using soft.square.net.WebApi.Modules.Storage.UseCases.Items;
+using soft.square.net.WebApi.Modules.Storage.UseCases.Processing;
 
 namespace soft.square.net.WebApi.Modules.Storage.UseCases.Uploads;
 
@@ -95,7 +96,8 @@ public sealed class WriteChunkHandler(IStorageStore store, StorageCaller caller,
 /// </summary>
 public sealed record CompleteUploadCommand(Guid Id) : ICommand<Result<ItemDto>>;
 
-public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access, StorageCaller caller, IBlobStores stores)
+public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access, StorageCaller caller, IBlobStores stores, IFileScanner scanner,
+    IStorageWork work, ITenantContext tenant, IOptions<StorageOptions> options)
     : ICommandHandler<CompleteUploadCommand, Result<ItemDto>>
 {
     public async ValueTask<Result<ItemDto>> Handle(CompleteUploadCommand command, CancellationToken ct)
@@ -111,6 +113,9 @@ public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access
         var me = caller.UserId;
         var now = caller.Now;
         var version = FileVersion.Create(session.BlobKey, session.Size, session.ContentType, me, now);
+        // With a scanner the new bytes wait for it; images get a thumbnail (after the scan).
+        var scan = scanner.Enabled ? ScanStatus.Pending : ScanStatus.Clean;
+        var thumbnail = Thumbnails.Supports(version.ContentType, version.Size, options.Value);
         Item file;
         var existing = await store.ChildByNameAsync(session.FolderId, session.Name, ct);
         if (existing is not null && session.Conflict == NameConflict.Replace)
@@ -118,7 +123,7 @@ public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access
             if (existing.IsFolder) return Result<ItemDto>.Conflict($"'{existing.Name}' is a folder; it cannot be replaced by a file.");
             if (!(await access.RightsOnChildAsync(folder.Value, existing, ct)).HasFlag(StorageRights.CreateFiles))
                 return Result<ItemDto>.Forbidden(StorageMessages.Denied);
-            existing.AddVersion(version, me, now);
+            existing.AddVersion(version, me, now, scan);
             file = existing;
         }
         else
@@ -126,14 +131,15 @@ public sealed class CompleteUploadHandler(IStorageStore store, ItemAccess access
             var name = await FreeNames.FindAsync(store, session.FolderId, session.Name, session.Conflict == NameConflict.KeepBoth,
                 (n, i) => ItemNames.Numbered(n, i, isFolder: false), ct);
             if (name is null) return Result<ItemDto>.Conflict(StorageMessages.NameTaken(session.Name));
-            file = Item.CreateFile(folder.Value.Item, name, me, version, now);
+            file = Item.CreateFile(folder.Value.Item, name, me, version, now, scan);
             store.Add(file);
         }
 
         await stores.Get(session.Location ?? "").CompleteUploadAsync(session.BlobKey, session.ProviderUploadId, session.PartReceipts, session.Size, ct);
-        store.Add(Blob.Create(session.BlobKey, session.Location ?? "", session.Size, now));
+        store.Add(Blob.Create(session.BlobKey, session.Location ?? "", session.Size, now, scan == ScanStatus.Pending, thumbnail));
         store.Remove(session);
         await store.SaveAsync(ct);
+        if (scan == ScanStatus.Pending || thumbnail) work.Notify(tenant.Required.Id);
         return ItemDto.From(file, await access.RightsOnChildAsync(folder.Value, file, ct));
     }
 }

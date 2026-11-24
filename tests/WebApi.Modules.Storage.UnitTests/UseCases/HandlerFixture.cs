@@ -21,7 +21,9 @@ public sealed class HandlerFixture
     public ItemAccess Access { get; }
     public soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStores Stores { get; } = Substitute.For<soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStores>();
     public soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStore Blobs { get; } = Substitute.For<soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IBlobStore>();
+    public soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IDownloadTickets Tickets { get; } = Substitute.For<soft.square.net.WebApi.Modules.Storage.UseCases.Blobs.IDownloadTickets>();
     public Purger Purger { get; }
+    public ThumbnailLinks Thumbnails { get; }
 
     private readonly Dictionary<Guid, Item> _items = [];
 
@@ -37,7 +39,9 @@ public sealed class HandlerFixture
         Caller = new StorageCaller(Scopes, Groups, Clock);
         Access = new ItemAccess(Store, Caller);
         Stores.Get(Arg.Any<string>()).Returns(Blobs);
-        Purger = new Purger(Store, Stores, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        Purger = new Purger(Store, Stores, Clock, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        Thumbnails = new ThumbnailLinks(Store, Stores, Tickets, Tenant, Microsoft.Extensions.Options.Options.Create(new StorageOptions()));
+        Store.BlobsAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>()).Returns([]);
 
         Store.ChainAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(call => Chain(call.Arg<Guid>()));
         Store.ChildrenAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())

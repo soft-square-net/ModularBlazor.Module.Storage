@@ -4,12 +4,13 @@ using soft.square.net.WebApi.Modules.Storage.UseCases.Blobs;
 namespace soft.square.net.WebApi.Modules.Storage.UseCases.Items;
 
 /// <summary>What one sweep of a tenant did.</summary>
-public sealed record SweepResult(int ItemsPurged, int BlobsDeleted, long BytesFreed, int UploadsExpired);
+public sealed record SweepResult(int ItemsPurged, int BlobsDeleted, long BytesFreed, int UploadsExpired, int EventsRemoved = 0);
 
 /// <summary>
 /// The current tenant's housekeeping, run by the sweeper every <see cref="StorageOptions.SweepInterval"/> (and by Storage
 /// admins on demand): items in the recycle bin longer than <see cref="StorageOptions.RecycleBinDays"/> are purged,
-/// unfinished uploads past their lifetime are aborted, and blobs nobody uses any more are deleted from their stores.
+/// unfinished uploads past their lifetime are aborted, blobs nobody uses any more are deleted from their stores, and events
+/// older than <see cref="StorageOptions.EventRetentionDays"/> leave the feed.
 /// It works in batches, so a big backlog takes a few sweeps. Needs no caller.
 /// </summary>
 public sealed record SweepCommand : ICommand<Result<SweepResult>>;
@@ -34,7 +35,7 @@ public sealed class SweepHandler(IStorageStore store, IBlobStores stores, Purger
                 {
                     // An earlier purge in this batch may have taken it (it was below a purged folder).
                     if (await store.ChainAsync(item.Id, ct) is null) continue;
-                    purged += await purger.PurgeAsync(item, ct);
+                    purged += await purger.PurgeAsync(item, "system", ct);
                 }
                 if (expired.Count < Purger.Batch) break;
             }
@@ -57,6 +58,9 @@ public sealed class SweepHandler(IStorageStore store, IBlobStores stores, Purger
         if (uploads > 0) await store.SaveAsync(ct);
 
         var (blobs, bytes) = await purger.DeleteUnusedBlobsAsync(ct, MaxBatches);
-        return new SweepResult(purged, blobs, bytes, uploads);
+        var events = options.Value.EventRetentionDays > 0
+            ? await store.DeleteEventsBeforeAsync(now.AddDays(-options.Value.EventRetentionDays), ct)
+            : 0;
+        return new SweepResult(purged, blobs, bytes, uploads, events);
     }
 }

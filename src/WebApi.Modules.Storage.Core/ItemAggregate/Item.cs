@@ -1,5 +1,6 @@
 using soft.square.net.WebApi.Modules.Storage.Core.AccessControl;
 using soft.square.net.WebApi.Modules.Storage.Core.Common;
+using soft.square.net.WebApi.Modules.Storage.Core.EventAggregate;
 
 namespace soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
 
@@ -23,7 +24,10 @@ public enum FolderRole
     Home
 }
 
-/// <summary>A file's virus scan state. Without a scanner every file is <see cref="Clean"/>.</summary>
+/// <summary>
+/// A file's virus scan state (of its current version's bytes). Without a scanner every file is <see cref="Clean"/>;
+/// with one, a file that is not clean cannot be downloaded, previewed, opened by a share link or served publicly.
+/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<ScanStatus>))]
 public enum ScanStatus
 {
@@ -42,6 +46,7 @@ public enum ScanStatus
 /// <item>Access: an NTFS-style list of <see cref="Entries"/>, inherited from the folders above unless
 /// <see cref="InheritsAccess"/> is off (see <see cref="AccessEvaluator"/>), and an <see cref="OwnerId"/>.</item>
 /// <item>Deleting moves the item to the recycle bin (<see cref="DeletedAt"/>); its name is free again in its folder.</item>
+/// <item>What happens to it is raised as an <see cref="ItemEvent"/> (the outbox feed for workflows); system folders raise none.</item>
 /// </list>
 /// </summary>
 public sealed class Item : AggregateRoot<Guid>, ITenantOwned
@@ -138,13 +143,19 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         return item;
     }
 
-    public static Item CreateFolder(Item parent, string name, string by, DateTimeOffset now) =>
-        New(ItemKind.Folder, parent, name, by, now);
+    public static Item CreateFolder(Item parent, string name, string by, DateTimeOffset now)
+    {
+        var item = New(ItemKind.Folder, parent, name, by, now);
+        item.Happened(StorageEventTypes.Created, by, now);
+        return item;
+    }
 
-    public static Item CreateFile(Item parent, string name, string by, FileVersion first, DateTimeOffset now)
+    /// <param name="scan">The scan state of <paramref name="first"/>'s bytes (Pending for a new upload when a scanner is configured).</param>
+    public static Item CreateFile(Item parent, string name, string by, FileVersion first, DateTimeOffset now, ScanStatus scan = ScanStatus.Clean)
     {
         var item = New(ItemKind.File, parent, name, by, now);
-        item.AddVersion(first, by, now);
+        item.SetVersion(first, scan, by, now);
+        item.Happened(StorageEventTypes.Created, by, now);
         return item;
     }
 
@@ -172,7 +183,14 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
     }
 
     /// <summary>A new version of a file becomes the current one (upload over it, or an editor's save).</summary>
-    public void AddVersion(FileVersion version, string by, DateTimeOffset now)
+    /// <param name="scan">The scan state of the version's bytes.</param>
+    public void AddVersion(FileVersion version, string by, DateTimeOffset now, ScanStatus scan = ScanStatus.Clean)
+    {
+        SetVersion(version, scan, by, now);
+        Happened(StorageEventTypes.Versioned, by, now);
+    }
+
+    private void SetVersion(FileVersion version, ScanStatus scan, string by, DateTimeOffset now)
     {
         if (IsFolder) throw new DomainException("Folders have no versions.");
         EnsureNotDeleted();
@@ -181,15 +199,32 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         CurrentVersion = number;
         Size = version.Size;
         ContentType = version.ContentType;
-        Scan = ScanStatus.Clean;
+        Scan = scan;
         Touch(by, now);
+    }
+
+    /// <summary>
+    /// The scanner's verdict on the bytes of <paramref name="blobKey"/>: applied when they are the current version's
+    /// (an older version's verdict stays with its blob). Returns whether it applied.
+    /// </summary>
+    public bool Scanned(string blobKey, string? threat, DateTimeOffset now)
+    {
+        if (Current?.BlobKey != blobKey) return false;
+        var scan = threat is null ? ScanStatus.Clean : ScanStatus.Infected;
+        if (Scan == scan) return false;
+        Scan = scan;
+        Version++;
+        Happened(StorageEventTypes.Scanned, "system", now, threat is null ? "clean" : $"infected: {threat}");
+        return true;
     }
 
     public void Rename(string name, string by, DateTimeOffset now)
     {
         EnsureEditable();
+        var old = Name;
         SetName(name);
         Touch(by, now);
+        if (old != Name) Happened(StorageEventTypes.Renamed, by, now, old);
     }
 
     /// <summary>
@@ -207,8 +242,10 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         if (parent.Role == FolderRole.Homes) throw new DomainException("Only home folders live in the Users folder.");
         var old = (Path, Depth);
         if (parent.Depth + 1 + subtreeHeight > MaxDepth) throw new DomainException($"Folders can be nested at most {MaxDepth} levels deep.");
+        var oldParent = ParentId;
         Place(parent);
         Touch(by, now);
+        Happened(StorageEventTypes.Moved, by, now, oldParent?.ToString("D"));
         return old;
     }
 
@@ -231,6 +268,7 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         DeletedBy = by;
         NameKey = ItemNames.DeletedKey(Id);
         Version++;
+        Happened(StorageEventTypes.Deleted, by, now);
     }
 
     /// <summary>
@@ -244,17 +282,19 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         DeletedBy = null;
         SetName(name);
         Touch(by, now);
+        Happened(StorageEventTypes.Restored, by, now);
     }
 
     /// <summary>
     /// An earlier version becomes the current one again, as a new version with the same bytes (Windows' "Restore"
     /// in Previous Versions); the history is kept. Returns the new version, whose blob gains a reference.
     /// </summary>
-    public FileVersion RestoreVersion(int number, string by, DateTimeOffset now)
+    /// <param name="scan">The scan state of the old version's bytes (its blob's).</param>
+    public FileVersion RestoreVersion(int number, string by, DateTimeOffset now, ScanStatus scan = ScanStatus.Clean)
     {
         var old = VersionOf(number);
         if (number == CurrentVersion) throw new DomainException($"Version {number} is the current version.");
-        AddVersion(FileVersion.Create(old.BlobKey, old.Size, old.ContentType, by, now), by, now);
+        AddVersion(FileVersion.Create(old.BlobKey, old.Size, old.ContentType, by, now), by, now, scan);
         return Current!;
     }
 
@@ -319,6 +359,16 @@ public sealed class Item : AggregateRoot<Guid>, ITenantOwned
         Depth = parent is null ? 0 : parent.Depth + 1;
         Path = (parent?.Path ?? "/") + Id.ToString("N") + "/";
     }
+
+    /// <summary>The event for the outbox, when this is not a system folder (they are made and kept by the module).</summary>
+    private void Happened(string type, string by, DateTimeOffset now, string? detail = null)
+    {
+        if (IsSystem) return;
+        Raise(new ItemEvent(type, Id, Kind, Name, ParentId, IsFolder ? null : CurrentVersion, by, now, detail));
+    }
+
+    /// <summary>The event for the outbox when the item is removed for good (the purge removes rows; nothing else raises it).</summary>
+    public void Purged(int items, string by, DateTimeOffset now) => Happened(StorageEventTypes.Purged, by, now, items.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     private void Touch(string by, DateTimeOffset now)
     {

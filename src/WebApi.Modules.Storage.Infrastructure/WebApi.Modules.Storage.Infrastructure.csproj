@@ -3,7 +3,8 @@
 
   <!--
     Infrastructure: the tenant DbContext (Data/StorageDbContext.cs), the entity mappings (Data/Config), the
-    migrations, one set per engine (Data/Migrations/<Provider>), and the blob stores (Blobs/: the local disk, S3 / MinIO).
+    migrations, one set per engine (Data/Migrations/<Provider>), the blob stores (Blobs/: the local disk, S3 / MinIO),
+    and the processing adapters (Processing/: ClamAV, ImageSharp thumbnails).
     References Core and UseCases (for IBlobStore). Not the entry assembly: WebApi.Modules.Storage.Web is.
   -->
 
@@ -15,6 +16,8 @@
   <ItemGroup>
     <!-- S3 and MinIO. Private: copied into the module's output and loaded in its own load context. -->
     <PackageReference Include="AWSSDK.S3" Version="$(AwsSdkS3Version)" />
+    <!-- Thumbnails (Processing/ImageSharpThumbnailer.cs): pure managed, so it unloads with the module. Private too. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="$(ImageSharpVersion)" />
   </ItemGroup>
 
   <ItemGroup>

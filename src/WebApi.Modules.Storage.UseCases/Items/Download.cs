@@ -21,6 +21,8 @@ public sealed class GetFileContentHandler(ItemAccess access, IStorageStore store
         var version = await FileVersions.ReachAsync(access, query.Id, query.Version, ct);
         if (!version.IsSuccess) return version.As<FileContent>();
         var (item, v) = version.Value;
+        var safe = await FileVersions.SafeAsync(store, item, v, ct);
+        if (!safe.IsSuccess) return safe.As<FileContent>();
         var content = await stores.Get(await FileVersions.LocationAsync(store, v, ct)).OpenAsync(v.BlobKey, ct);
         if (content is null) return Result<FileContent>.NotFound("The file's content is missing from storage.");
         return new FileContent(content.Stream, content.Length, item.Name, v.ContentType, v.CreatedAt, $"\"{item.Id:N}-{v.Number}\"");
@@ -38,6 +40,8 @@ public sealed class GetDownloadLinkHandler(ItemAccess access, IStorageStore stor
         var version = await FileVersions.ReachAsync(access, query.Id, query.Version, ct);
         if (!version.IsSuccess) return version.As<DownloadLink>();
         var (item, v) = version.Value;
+        var safe = await FileVersions.SafeAsync(store, item, v, ct);
+        if (!safe.IsSuccess) return safe.As<DownloadLink>();
         var lifetime = options.Value.DownloadLinkLifetime;
         var url = await FileVersions.LinkAsync(store, stores, tickets, tenant.Required.Id, item, v, query.Inline, lifetime, ct);
         return new DownloadLink(url, caller.Now + lifetime);
@@ -65,6 +69,21 @@ public sealed class OpenTicketHandler(IDownloadTickets tickets, IBlobStores stor
 
 internal static class FileVersions
 {
+    /// <summary>
+    /// Whether a version's bytes may be handed out (downloads, previews, share links, public folders): not while the
+    /// virus scanner has not passed them, never when it found something (the blob's verdict covers every copy).
+    /// </summary>
+    public static async Task<Result> SafeAsync(IStorageStore store, Item item, FileVersion version, CancellationToken ct)
+    {
+        var blob = (await store.BlobsAsync([version.BlobKey], ct)).FirstOrDefault();
+        var scan = blob?.Scan ?? ScanStatus.Clean;
+        return scan == ScanStatus.Clean ? Result.Success() : Result.Conflict(NotSafe(item.Name, scan, blob?.Threat));
+    }
+
+    public static string NotSafe(string name, ScanStatus scan, string? threat) => scan == ScanStatus.Infected
+        ? $"'{name}' contains a virus{(threat is null ? "" : $" ({threat})")}; it is quarantined and cannot be opened."
+        : $"'{name}' is being checked for viruses; try again in a moment.";
+
     /// <summary>The store a version's blob was written to (a blob without a record is from before locations: the local disk).</summary>
     public static async Task<string> LocationAsync(IStorageStore store, FileVersion version, CancellationToken ct) =>
         (await store.BlobsAsync([version.BlobKey], ct)).FirstOrDefault()?.Location ?? "";

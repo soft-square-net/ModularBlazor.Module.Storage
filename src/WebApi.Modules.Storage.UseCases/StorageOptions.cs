@@ -24,6 +24,27 @@ public sealed class StorageOptions
     /// <summary>How often each tenant is swept (bin retention, expired uploads, unused blobs); zero turns the sweeper off.</summary>
     public TimeSpan SweepInterval { get; set; } = TimeSpan.FromHours(1);
 
+    /// <summary>Days the event feed (GET /events) keeps an event; the sweeper removes older ones.</summary>
+    public int EventRetentionDays { get; set; } = 7;
+
+    /// <summary>
+    /// How old an event must be before the feed shows it. Saves running at the same moment may commit their events out
+    /// of id order; waiting a little lets the slower one land before a reader moves past its id.
+    /// </summary>
+    public TimeSpan EventDelay { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>How often each tenant's new files are scanned and given thumbnails (also right after an upload); zero turns it off.</summary>
+    public TimeSpan ProcessInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>The longest side of a thumbnail, in pixels.</summary>
+    public int ThumbnailSize { get; set; } = 320;
+
+    /// <summary>Images bigger than this (bytes) get no thumbnail.</summary>
+    public long ThumbnailMaxBytes { get; set; } = 50L * 1024 * 1024;
+
+    /// <summary>The virus scanner (section "Storage:ClamAV"): ClamAV's clamd, off until a host is set.</summary>
+    public ClamAvSettings ClamAV { get; set; } = new();
+
     /// <summary>Most items a single copy may create (a folder copies everything below it).</summary>
     public int MaxCopyItems { get; set; } = 10_000;
 
@@ -61,4 +82,18 @@ public sealed class BlobPlacement
 
     /// <summary>The quota in bytes, or null for none.</summary>
     public long? Limit => Quota is > 0 ? Quota : null;
+}
+
+/// <summary>
+/// ClamAV's daemon (clamd) over TCP, INSTREAM. With a <see cref="Host"/>, every new file waits for its scan before it
+/// can be downloaded; without one, files are clean as soon as they are uploaded.
+/// </summary>
+public sealed class ClamAvSettings
+{
+    public string? Host { get; set; }
+    public int Port { get; set; } = 3310;
+    /// <summary>How long one scan may take.</summary>
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Host);
 }

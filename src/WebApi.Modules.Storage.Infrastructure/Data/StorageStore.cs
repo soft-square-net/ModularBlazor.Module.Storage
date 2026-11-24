@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using soft.square.net.WebApi.Modules.Storage.Core.BlobAggregate;
+using soft.square.net.WebApi.Modules.Storage.Core.EventAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.Common;
 using soft.square.net.WebApi.Modules.Storage.Core.ItemAggregate;
 using soft.square.net.WebApi.Modules.Storage.Core.PersonAggregate;
@@ -149,6 +150,22 @@ internal sealed class StorageStore(StorageDbContext db) : IStorageStore
     public Task<ShareLink?> LinkAsync(Guid id, CancellationToken ct) => db.ShareLinks.FirstOrDefaultAsync(l => l.Id == id, ct);
 
     public Task<ShareLink?> LinkByTokenAsync(string token, CancellationToken ct) => db.ShareLinks.FirstOrDefaultAsync(l => l.Token == token, ct);
+
+    public async Task<IReadOnlyList<StorageEvent>> EventsAsync(long after, DateTimeOffset upTo, int take, CancellationToken ct) =>
+        await db.Events.Where(e => e.Id > after && e.At <= upTo).OrderBy(e => e.Id).Take(take).ToListAsync(ct);
+
+    public Task<int> DeleteEventsBeforeAsync(DateTimeOffset before, CancellationToken ct) =>
+        db.Events.Where(e => e.At < before).ExecuteDeleteAsync(ct);
+
+    public async Task<IReadOnlyList<Blob>> BlobsToScanAsync(int take, CancellationToken ct) =>
+        await db.Blobs.Where(b => b.Scan == ScanStatus.Pending && b.References > 0).OrderBy(b => b.CreatedAt).Take(take).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Blob>> BlobsToThumbnailAsync(int take, CancellationToken ct) =>
+        await db.Blobs.Where(b => b.Thumbnail == ThumbnailState.Pending && b.Scan == ScanStatus.Clean && b.References > 0)
+            .OrderBy(b => b.CreatedAt).Take(take).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Item>> FilesWithBlobAsync(string blobKey, CancellationToken ct) =>
+        await db.Items.Where(i => i.Kind == ItemKind.File && i.Versions.Any(v => v.BlobKey == blobKey)).ToListAsync(ct);
 
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 

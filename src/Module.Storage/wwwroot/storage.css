@@ -52,3 +52,30 @@
 .st-check { display: flex; gap: 8px; align-items: flex-start; }
 .st-btn--primary { background: var(--mud-palette-primary); border-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text, #fff); }
 .st-btn--primary:hover:not(:disabled) { filter: brightness(.92); background: var(--mud-palette-primary); }
+
+/* Pickers (dialogs Module.Storage/pick-files and pick-folder; shown on other modules' pages too). */
+.st-picker { display: flex; flex-direction: column; gap: 8px; inline-size: 100%; min-inline-size: 0; box-sizing: border-box; }
+.st-pick-places { display: flex; gap: 4px; flex-wrap: wrap; }
+.st-pick-place { font: inherit; padding: 4px 12px; border-radius: 999px; cursor: pointer; border: 1px solid var(--mud-palette-lines-default);
+  background: transparent; color: inherit; }
+.st-pick-place.is-on { background: var(--mud-palette-primary); border-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text, #fff); }
+.st-pick-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.st-pick-crumbs { flex: 1 1 auto; min-inline-size: 0; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
+.st-pick-crumb { all: unset; cursor: pointer; color: var(--mud-palette-primary); }
+.st-pick-crumb:hover, .st-pick-crumb:focus-visible { text-decoration: underline; }
+.st-pick-sep { color: var(--mud-palette-text-secondary); }
+.st-pick-search { inline-size: 14em; }
+.st-pick-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;
+  block-size: min(360px, 50vh); overflow: auto; }
+.st-pick-row { display: flex; gap: 8px; align-items: center; padding: 6px 8px; cursor: pointer; border-block-end: 1px solid var(--mud-palette-lines-default); }
+.st-pick-row:last-child { border-block-end: none; }
+.st-pick-row:hover { background: var(--mud-palette-action-default-hover); }
+.st-pick-row.is-on { background: color-mix(in srgb, var(--mud-palette-primary) 14%, transparent); }
+.st-pick-row.is-off { cursor: not-allowed; opacity: .55; }
+.st-pick-icon { inline-size: 32px; text-align: center; flex: none; }
+.st-pick-thumb { inline-size: 32px; block-size: 32px; object-fit: cover; border-radius: 3px; flex: none; }
+.st-pick-name { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-pick-meta { flex: none; font-size: .8rem; color: var(--mud-palette-text-secondary); }
+.st-pick-empty, .st-pick-hint, .st-pick-chosen { margin: 0; font-size: .85rem; color: var(--mud-palette-text-secondary); }
+.st-pick-error { margin: 0; color: var(--mud-palette-error); }
+@media (max-width: 600px) { .st-pick-meta { display: none; } .st-pick-search { inline-size: 100%; } }

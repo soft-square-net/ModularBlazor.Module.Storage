@@ -34,6 +34,7 @@ public sealed class GetRootsHandler(IStorageStore store, StorageCaller caller, I
         var subfolders = await store.WithSubfoldersAsync([files.Id, home.Id], ct);
         return new Roots(
             ItemDto.From(files, await caller.RightsAsync([files], ct), subfolders.Contains(files.Id)),
-            ItemDto.From(home, await caller.RightsAsync([homes, home], ct), subfolders.Contains(home.Id)));
+            ItemDto.From(home, await caller.RightsAsync([homes, home], ct), subfolders.Contains(home.Id)),
+            tenant.Required.Id);
     }
 }
