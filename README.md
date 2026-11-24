@@ -202,7 +202,15 @@ playground grants, through `Access:DevGrants` (Development only, by email):
 
 Blobs go to MinIO, bucket `storage` (console http://localhost:9001, user `playground`, password: the parameter
 `minio-password` in the dashboard); with `Playground:Blobs=local` they stay on the disk in `playground/.data/blobs`,
-where files written before phase 2 also stay. Data stays in the Docker volumes `storage-playground-data` and
+where files written before phase 2 also stay.
+
+The MinIO image is pinned to `minio/minio:RELEASE.2025-09-07T16-13-09Z`. MinIO removed its images from Docker Hub (and
+`quay.io/minio/minio` refuses anonymous pulls), so that tag can no longer be pulled: it has to be in the local Docker
+already. A machine that has that release under another tag can name it, e.g.
+`docker tag minio/minio:latest minio/minio:RELEASE.2025-09-07T16-13-09Z` (check first with
+`docker run --rm minio/minio:latest --version`). Without it, use `Playground:Blobs=local`.
+
+Data stays in the Docker volumes `storage-playground-data` and
 `storage-playground-minio`, and in `playground/.data`. The playground is not in `ModularBlazor.Module.Storage.slnx`: CI builds the module without a
 platform checkout.
 
