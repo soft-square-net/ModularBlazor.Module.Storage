@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of Core (names, the Item aggregate, the NTFS-style access evaluator, upload sessions) and UseCases
+       (handlers, with NSubstitute for the store and the platform's IAccessScopes). No database, no host. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WebApi.Modules.Storage.Core\WebApi.Modules.Storage.Core.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Storage.UseCases\WebApi.Modules.Storage.UseCases.csproj" />
+  </ItemGroup>
+
+</Project>

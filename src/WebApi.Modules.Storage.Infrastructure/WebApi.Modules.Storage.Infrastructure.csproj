@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
+
+  <!--
+    Infrastructure: the tenant DbContext (Data/StorageDbContext.cs), the entity mappings (Data/Config), the
+    migrations, one set per engine (Data/Migrations/<Provider>), the blob stores (Blobs/: the local disk, S3 / MinIO),
+    and the processing adapters (Processing/: ClamAV, ImageSharp thumbnails).
+    References Core and UseCases (for IBlobStore). Not the entry assembly: WebApi.Modules.Storage.Web is.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\WebApi.Modules.Storage.Core\WebApi.Modules.Storage.Core.csproj" />
+    <ProjectReference Include="..\WebApi.Modules.Storage.UseCases\WebApi.Modules.Storage.UseCases.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- S3 and MinIO. Private: copied into the module's output and loaded in its own load context. -->
+    <PackageReference Include="AWSSDK.S3" Version="$(AwsSdkS3Version)" />
+    <!-- Thumbnails (Processing/ImageSharpThumbnailer.cs): pure managed, so it unloads with the module. Private too. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="$(ImageSharpVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="soft.square.net.WebApi.Modules.Storage.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

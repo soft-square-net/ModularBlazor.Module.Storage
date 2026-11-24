@@ -1,0 +1,120 @@
+@attribute [ClientDialog(StorageDialogs.PickFiles, Title = "Choose files", MaxWidth = "720px")]
+
+@*
+  Dialog "Module.Storage/pick-files" (see StorageDialogs.PickFiles): browse the files the user may read and choose one
+  or more.
+    parameters  { multiple?: bool, accept?: [string], folderId?: id, publicOnly?: bool }
+    result      { ids: [...], files: [{ id, name, size, contentType, version, folderId, publicUrl }] }
+*@
+
+<div class="mud-dialog-content">
+  <StorageBrowser @ref="_browser" Start="_start" Multiple="_multiple" Selected="_ids" Refuse="Refuse" OnFile="PickAsync" OnFolder="FolderChanged" />
+  @if (_multiple && _chosen.Count > 0)
+  {
+    <p class="st-pick-chosen">@L["Chosen: {0}", string.Join(", ", _chosen.Select(c => c.File.Name))]</p>
+  }
+</div>
+<div class="mud-dialog-actions">
+  <button type="button" class="mud-button-root mud-button-text mud-button-medium" @onclick="Dialog.Cancel">@L["Cancel"]</button>
+  @if (_multiple)
+  {
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" disabled="@(_chosen.Count == 0)" @onclick="Done">@L["Choose ({0})", _chosen.Count]</button>
+  }
+</div>
+
+@code {
+  [CascadingParameter] public IDialogReference Dialog { get; set; } = default!;
+  [Inject] private IHttpClientFactory HttpClients { get; set; } = default!;
+  [Inject] private IStringLocalizerFactory Texts { get; set; } = default!;
+
+  /// <summary>The caller's parameters (web JSON).</summary>
+  private sealed record Parameters(bool? Multiple, List<string>? Accept, string? FolderId, bool? PublicOnly);
+
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(StorageBrowser));
+
+  private StorageBrowser? _browser;
+  private bool _multiple;
+  private bool _publicOnly;
+  private Guid? _start;
+  private List<string> _accept = [];
+  private readonly HashSet<Guid> _ids = [];
+  private readonly List<(ItemDto File, string? PublicUrl)> _chosen = [];
+  private FolderView? _folder;
+
+  protected override void OnInitialized()
+  {
+    var parameters = Dialog.GetParameters<Parameters>();
+    _multiple = parameters?.Multiple == true;
+    _publicOnly = parameters?.PublicOnly == true;
+    _start = Guid.TryParse(parameters?.FolderId, out var start) ? start : null;
+    _accept = [.. (parameters?.Accept ?? []).Select(a => a.Trim()).Where(a => a.Length > 0)];
+  }
+
+  private void FolderChanged(FolderView? folder) => _folder = folder;
+
+  /// <summary>Why a file cannot be chosen, or null.</summary>
+  private string? Refuse(ItemDto file, FolderView? folder)
+  {
+    if (file.Scan == ScanStatus.Infected) return L["Infected: quarantined"];
+    if (file.Scan != ScanStatus.Clean) return L["Waiting for the virus check"];
+    if (!Accepted(file)) return L["Not a file this asks for."];
+    if (_publicOnly && folder?.PublicFolderId is null) return L["Only files in public folders can be chosen here."];
+    return null;
+  }
+
+  private bool Accepted(ItemDto file)
+  {
+    if (_accept.Count == 0) return true;
+    var type = file.ContentType ?? "";
+    foreach (var a in _accept)
+    {
+      if (a.StartsWith('.') && file.Name.EndsWith(a, StringComparison.OrdinalIgnoreCase)) return true;
+      if (a.EndsWith("/*", StringComparison.Ordinal) && type.StartsWith(a[..^1], StringComparison.OrdinalIgnoreCase)) return true;
+      if (string.Equals(a, type, StringComparison.OrdinalIgnoreCase)) return true;
+    }
+    return false;
+  }
+
+  private void PickAsync(ItemDto file)
+  {
+    var publicUrl = _folder?.PublicFolderId is not null ? PublicUrl(file) : null;
+    if (!_multiple)
+    {
+      _chosen.Clear();
+      _chosen.Add((file, publicUrl));
+      Done();
+      return;
+    }
+    if (_ids.Remove(file.Id)) _chosen.RemoveAll(c => c.File.Id == file.Id);
+    else
+    {
+      _ids.Add(file.Id);
+      _chosen.Add((file, publicUrl));
+    }
+  }
+
+  /// <summary>A file's stable address in a public folder (the API's anonymous GET /public/{tenant}/{id}/{name}).</summary>
+  private string? PublicUrl(ItemDto file)
+  {
+    if (_browser?.Roots is not { TenantId: { Length: > 0 } tenant }) return null;
+    var gateway = HttpClients.CreateClient(HttpClientNames.WebApi).BaseAddress?.ToString() ?? "/";
+    if (!gateway.EndsWith('/')) gateway += "/";
+    return $"{gateway}api/storage/public/{Uri.EscapeDataString(tenant)}/{file.Id}/{Uri.EscapeDataString(file.Name)}";
+  }
+
+  private void Done() => Dialog.Close(new
+  {
+    ids = _chosen.Select(c => c.File.Id.ToString()).ToArray(),
+    files = _chosen.Select(c => new
+    {
+      id = c.File.Id.ToString(),
+      name = c.File.Name,
+      size = c.File.Size,
+      contentType = c.File.ContentType,
+      version = c.File.CurrentVersion,
+      folderId = c.File.ParentId?.ToString(),
+      publicUrl = c.PublicUrl,
+    }).ToArray()
+  });
+}

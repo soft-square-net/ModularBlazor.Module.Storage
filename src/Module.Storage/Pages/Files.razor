@@ -1,0 +1,212 @@
+@page "/files"
+@implements IAsyncDisposable
+
+@*
+  Files: the tenant's files and folders in MudTail's Windows 11 style explorer (Layouts.Default's runtime,
+  create('explorer', ...)). The explorer asks this page every question (places, list, children, rename, preview,
+  command) and the page answers from the Storage API (/api/storage). ?folder={id} opens that folder.
+*@
+
+<PageTitle>@L["Files"]</PageTitle>
+
+<div class="mud-container mud-container--maxwidth-false st-page">
+  @if (_error is not null)
+  {
+    <h1 class="mud-typography mud-typography-h5">@L["Files"]</h1>
+    <p class="st-error" role="alert">@_error</p>
+  }
+  else if (_loading)
+  {
+    <p class="st-muted">@L["Loading…"]</p>
+  }
+  <div class="st-explorer" @ref="_host" hidden="@(_error is not null)"></div>
+</div>
+
+@if (_versionsOf is { } file)
+{
+  <div class="st-scrim" @onclick="CloseVersions"></div>
+  <div class="st-modal st-modal--wide" role="dialog" aria-modal="true" aria-labelledby="st-versions-title">
+    <h2 id="st-versions-title" class="mud-typography mud-typography-h6">@L["Previous versions of \"{0}\"", file.Name]</h2>
+    @if (_versions.Count == 0)
+    {
+      <p class="st-muted">@(_versionsBusy ? L["Loading…"] : L["There are no previous versions."])</p>
+    }
+    else
+    {
+      <table class="st-versions">
+        <thead><tr><th>@L["Version"]</th><th>@L["Date"]</th><th>@L["Size"]</th><th></th></tr></thead>
+        <tbody>
+          @foreach (var v in _versions)
+          {
+            var current = v.Number == _versions[0].Number;
+            <tr>
+              <td>@v.Number@if (current) { <span class="st-muted st-current">@L["current"]</span> }</td>
+              <td>@v.CreatedAt.ToLocalTime().ToString("g")</td>
+              <td>@SizeText(v.Size)</td>
+              <td class="st-actions">
+                <button type="button" class="st-btn" disabled="@_versionsBusy" @onclick="() => OpenVersionAsync(v.Number)">@L["Open"]</button>
+                @if (!current)
+                {
+                  <button type="button" class="st-btn" disabled="@_versionsBusy" @onclick="() => RestoreVersionAsync(v.Number)">@L["Restore"]</button>
+                  <button type="button" class="st-btn st-btn--danger" disabled="@_versionsBusy" @onclick="() => DeleteVersionAsync(v)">@L["Delete"]</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    <div class="st-modal__buttons"><button type="button" class="st-btn" @onclick="CloseVersions">@L["Close"]</button></div>
+  </div>
+}
+
+@if (_shareOf is { } shared)
+{
+  <div class="st-scrim" @onclick="CloseShare"></div>
+  <div class="st-modal st-modal--wide st-share" role="dialog" aria-modal="true" aria-labelledby="st-share-title">
+    <h2 id="st-share-title" class="mud-typography mud-typography-h6">@L["Share \"{0}\"", shared.Name]</h2>
+    @if (_sharing is not { } sharing)
+    {
+      <p class="st-muted">@L["Loading…"]</p>
+    }
+    else
+    {
+      <section>
+        <h3>@L["People"]</h3>
+        <div class="st-row">
+          <input class="st-input st-grow" type="search" placeholder="@L["Add people by name or email"]" value="@_peopleSearch"
+                 @oninput="SearchPeopleAsync" disabled="@_shareBusy" aria-label="@L["Add people by name or email"]" />
+          <select class="st-input" @bind="_newAccess" aria-label="@L["Access"]">
+            <option value="@ShareAccess.View">@L["Can view"]</option>
+            @if (sharing.CanEdit)
+            {
+              <option value="@ShareAccess.Edit">@L["Can edit"]</option>
+            }
+          </select>
+        </div>
+        @if (_peopleFound.Count > 0)
+        {
+          <ul class="st-list st-found">
+            @foreach (var person in _peopleFound)
+            {
+              <li><button type="button" class="st-pick" @onclick="() => ShareWithAsync(person)">
+                <strong>@person.Name</strong> <span class="st-muted">@person.Email</span></button></li>
+            }
+          </ul>
+        }
+        else if (_peopleSearch.Trim().Length >= 2)
+        {
+          <p class="st-muted st-small">@L["Nobody found. People appear here after they have opened Files once."]</p>
+        }
+        @if (sharing.People.Count == 0)
+        {
+          <p class="st-muted st-small">@L["Not shared with anyone by name."]</p>
+        }
+        else
+        {
+          <ul class="st-list">
+            @foreach (var person in sharing.People)
+            {
+              <li class="st-row">
+                <span class="st-grow"><strong>@person.Name</strong> <span class="st-muted">@person.Email</span></span>
+                <select class="st-input" value="@person.Access" @onchange="e => ChangeAccessAsync(person, e)" disabled="@_shareBusy" aria-label="@L["Access"]">
+                  <option value="@ShareAccess.View">@L["Can view"]</option>
+                  @if (sharing.CanEdit || person.Access == ShareAccess.Edit)
+                  {
+                    <option value="@ShareAccess.Edit">@L["Can edit"]</option>
+                  }
+                  @if (person.Access == ShareAccess.Custom)
+                  {
+                    <option value="@ShareAccess.Custom" disabled>@L["Custom"]</option>
+                  }
+                </select>
+                <button type="button" class="st-btn" @onclick="() => StopSharingAsync(person)" disabled="@_shareBusy">@L["Remove"]</button>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section>
+        <h3>@L["Links"]</h3>
+        <p class="st-muted st-small">@(sharing.Kind == ItemKind.Folder
+            ? L["Anyone with a link can browse this folder and download its files, without signing in."]
+            : L["Anyone with a link can download this file, without signing in."])</p>
+        @foreach (var link in sharing.Links)
+        {
+          <div class="st-link @(link.Active ? null : "st-link--off")">
+            <div class="st-row">
+              <input class="st-input st-grow" readonly value="@LinkUrl(link)" aria-label="@L["Link"]" />
+              <button type="button" class="st-btn" @onclick="() => CopyAsync(LinkUrl(link))">@L["Copy"]</button>
+              <button type="button" class="st-btn" @onclick="() => DeleteLinkAsync(link)" disabled="@_shareBusy">@L["Remove"]</button>
+            </div>
+            <p class="st-muted st-small">@LinkSummary(link)</p>
+          </div>
+        }
+        <div class="st-row st-wrap">
+          <label class="st-field">@L["Expires"] <input class="st-input" type="date" @bind="_linkExpires" /></label>
+          <label class="st-field">@L["Password"] <input class="st-input" type="password" autocomplete="new-password" @bind="_linkPassword" /></label>
+          <label class="st-field">@L["Download limit"] <input class="st-input st-narrow" type="number" min="1" @bind="_linkLimit" /></label>
+          <button type="button" class="st-btn st-btn--primary" @onclick="CreateLinkAsync" disabled="@_shareBusy">@L["Create link"]</button>
+        </div>
+      </section>
+
+      @if (sharing.CanChangePublic || sharing.IsPublic || sharing.PublicFolderId is not null)
+      {
+        <section>
+          <h3>@L["Public"]</h3>
+          @if (sharing.Kind == ItemKind.Folder)
+          {
+            <label class="st-check">
+              <input type="checkbox" checked="@sharing.IsPublic" disabled="@(_shareBusy || !sharing.CanChangePublic)" @onchange="SetPublicAsync" />
+              @L["Public folder: anyone can open the files in it (and below it) without signing in, for example in published pages."]
+            </label>
+          }
+          else if (sharing.PublicFolderId is not null)
+          {
+            <p class="st-muted st-small">@L["This file is in a public folder. Its public address:"]</p>
+            <div class="st-row">
+              <input class="st-input st-grow" readonly value="@PublicUrl()" aria-label="@L["Public address"]" />
+              <button type="button" class="st-btn" @onclick="() => CopyAsync(PublicUrl())">@L["Copy"]</button>
+            </div>
+          }
+        </section>
+      }
+    }
+    <div class="st-modal__buttons"><button type="button" class="st-btn" @onclick="CloseShare">@L["Close"]</button></div>
+  </div>
+}
+
+@if (_securityOf is { } secured)
+{
+  <SecurityDialog ItemId="secured.Id" Name="@secured.Name" IsFolder="secured.IsFolder" Rights="secured.Rights" MyUserId="@_roots?.Home.OwnerId" FolderName="FolderDisplayName"
+                  Describe="Describe" OnClose="CloseSecurity" OnChanged="SecurityChangedAsync" />
+}
+
+@if (_edited is { } edited)
+{
+  <div class="st-scrim"></div>
+  <div class="st-modal st-editor" role="dialog" aria-modal="true" aria-labelledby="st-editor-title">
+    <div class="st-row st-editor__bar">
+      <h2 id="st-editor-title" class="mud-typography mud-typography-h6 st-grow">@L["Edit \"{0}\"", edited.Name]</h2>
+      @if (_editorChanged) { <span class="st-muted st-small">@L["Not saved"]</span> }
+      <button type="button" class="st-btn st-btn--primary" disabled="@(_editor is null || _editorBusy)" @onclick="() => SaveEditedAsync(copy: false)"
+              title="@L["Keeps the name: the edited image becomes the file's new version (the old one stays in Previous versions)."]">@L["Save"]</button>
+      <button type="button" class="st-btn" disabled="@(_editor is null || _editorBusy)" @onclick="() => SaveEditedAsync(copy: true)">@L["Save as a copy"]</button>
+      <button type="button" class="st-btn" disabled="@_editorBusy" @onclick="() => CloseEditorAsync()">@L["Close"]</button>
+    </div>
+    <div class="st-editor__host" @ref="_editorHost"></div>
+  </div>
+}
+
+@if (_confirm is { } confirm)
+{
+  <div class="st-scrim st-scrim--top" @onclick="() => Answer(false)"></div>
+  <div class="st-modal st-modal--top" role="alertdialog" aria-modal="true" aria-describedby="st-confirm-text">
+    <p id="st-confirm-text">@confirm.Question</p>
+    <div class="st-modal__buttons">
+      <button type="button" class="st-btn st-btn--danger" @onclick="() => Answer(true)">@confirm.Action</button>
+      <button type="button" class="st-btn" @onclick="() => Answer(false)" autofocus>@L["Cancel"]</button>
+    </div>
+  </div>
+}

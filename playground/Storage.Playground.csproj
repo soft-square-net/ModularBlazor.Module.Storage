@@ -1,0 +1,69 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+
+  <!--
+    Storage playground: a small platform (PostgreSQL, identity, one WebApi, the Blazor client) with this repo's module
+    in it. See README.md, "Developing". The platform's projects come from a ModularBlazor.Platform checkout next to this
+    repo (<workspace>/Platform and <workspace>/Module.Storage); set PlatformRoot to use another one, e.g.
+    dotnet run -p:PlatformRoot=D:/src/Platform/.
+    Not in ModularBlazor.Module.Storage.slnx on purpose: CI builds the module without a platform checkout.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId>modularblazor-storage-playground</UserSecretsId>
+    <PlatformRoot Condition="'$(PlatformRoot)' == ''">$(MSBuildThisFileDirectory)..\..\Platform\</PlatformRoot>
+    <!-- The module's entry project (IRuntimeModule, endpoints); its build output holds every layer. -->
+    <ModuleProject>..\src\WebApi.Modules.Storage.Web\WebApi.Modules.Storage.Web.csproj</ModuleProject>
+    <ModuleOutput>$(MSBuildThisFileDirectory)..\src\WebApi.Modules.Storage.Web\bin\$(Configuration)\net10.0\</ModuleOutput>
+    <!-- Install loop: the module's build output, zipped like an upload (out/ is git-ignored). -->
+    <ModulePackage>$(MSBuildThisFileDirectory)out\storage.zip</ModulePackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep in step with the Aspire SDK version above (and with the platform's Hybird app host). -->
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.6.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The platform, from source. -->
+    <ProjectReference Include="$(PlatformRoot)src\WebApi\WebApi\WebApi.csproj" />
+    <ProjectReference Include="$(PlatformRoot)src\WebApi\Identity\WebApi.Identity.Server\WebApi.Identity.Server.csproj" />
+    <ProjectReference Include="$(PlatformRoot)src\apps\blazor\ModularBlazor.BlzWebClient\ModularBlazor.BlzWebClient.csproj" />
+    <!-- The module: built before the playground starts, never referenced or run as a project (the WebApi loads it). -->
+    <ProjectReference Include="$(ModuleProject)" IsAspireProjectResource="false" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\src\WebApi.Modules.Storage.Client\WebApi.Modules.Storage.Client.csproj" IsAspireProjectResource="false" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\src\Module.Storage\Module.Storage.csproj" IsAspireProjectResource="false" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\src\Module.Storage.Shares\Module.Storage.Shares.csproj" IsAspireProjectResource="false" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Paths for AppHost.cs. -->
+    <AssemblyMetadata Include="ModuleOutput" Value="$([System.IO.Path]::GetFullPath('$(ModuleOutput)'))" />
+    <AssemblyMetadata Include="ModulePackage" Value="$([System.IO.Path]::GetFullPath('$(ModulePackage)'))" />
+    <AssemblyMetadata Include="ApiClientOutput" Value="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\src\WebApi.Modules.Storage.Client\bin\$(Configuration)\net10.0\soft.square.net.WebApi.Modules.Storage.Client.dll'))" />
+    <AssemblyMetadata Include="UiOutput" Value="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\src\Module.Storage\bin\$(Configuration)\net10.0\soft.square.net.Module.Storage.dll'))" />
+    <AssemblyMetadata Include="SharesOutput" Value="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\src\Module.Storage.Shares\bin\$(Configuration)\net10.0\soft.square.net.Module.Storage.Shares.dll'))" />
+    <AssemblyMetadata Include="PlaygroundData" Value="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory).data'))" />
+  </ItemGroup>
+
+  <Target Name="CheckPlatformCheckout" BeforeTargets="CollectPackageReferences;Restore;Build">
+    <Error Condition="!Exists('$(PlatformRoot)src\WebApi\WebApi\WebApi.csproj')"
+           Text="No ModularBlazor.Platform checkout at '$(PlatformRoot)'. Clone https://github.com/soft-square-net/ModularBlazor.Platform next to this repo (as 'Platform'), or pass -p:PlatformRoot=&lt;path to it&gt;/." />
+  </Target>
+
+  <!-- After every build, the module's parts ready to upload:
+         out/storage.zip       server part, for the Host Modules page (install loop only; the dev loop loads it directly)
+         out/client/*.dll      client parts, for the Client Modules page (the API client, hidden, first; then Module.Storage and Module.Storage.Shares) -->
+  <Target Name="PackModuleForUpload" AfterTargets="Build">
+    <ItemGroup>
+      <_ClientPart Include="$(MSBuildThisFileDirectory)..\src\WebApi.Modules.Storage.Client\bin\$(Configuration)\net10.0\soft.square.net.WebApi.Modules.Storage.Client.dll" />
+      <_ClientPart Include="$(MSBuildThisFileDirectory)..\src\Module.Storage\bin\$(Configuration)\net10.0\soft.square.net.Module.Storage.dll" />
+      <_ClientPart Include="$(MSBuildThisFileDirectory)..\src\Module.Storage.Shares\bin\$(Configuration)\net10.0\soft.square.net.Module.Storage.Shares.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(MSBuildThisFileDirectory)out\client" />
+    <ZipDirectory SourceDirectory="$(ModuleOutput)" DestinationFile="$(ModulePackage)" Overwrite="true" />
+    <Copy SourceFiles="@(_ClientPart)" DestinationFolder="$(MSBuildThisFileDirectory)out\client" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Module parts for upload: $([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)out'))" />
+  </Target>
+
+</Project>

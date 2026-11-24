@@ -1,0 +1,19 @@
+{
+  "$comment": "Arabic texts of the Shared links module (opens share links without signing in). Keys are the English source texts.",
+  "Shared link": "رابط مشاركة",
+  "Loading…": "جارٍ التحميل…",
+  "This link is protected": "هذا الرابط محمي",
+  "Password": "كلمة المرور",
+  "The password is wrong.": "كلمة المرور غير صحيحة.",
+  "Open": "فتح",
+  "Download": "تنزيل",
+  "Shared with you by a link": "تمت مشاركته معك عبر رابط",
+  "until {0}": "حتى {0}",
+  "Path": "المسار",
+  "This folder is empty.": "هذا المجلد فارغ.",
+  "Name": "الاسم",
+  "Date modified": "تاريخ التعديل",
+  "Size": "الحجم",
+  "bytes": "بايت",
+  "This link does not work any more: it was removed, it expired, or it reached its download limit.": "لم يعد هذا الرابط يعمل: أُزيل، أو انتهت صلاحيته، أو بلغ حدّ التنزيلات."
+}

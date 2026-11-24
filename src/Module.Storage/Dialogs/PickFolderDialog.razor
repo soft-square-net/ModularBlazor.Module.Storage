@@ -1,0 +1,66 @@
+@attribute [ClientDialog(StorageDialogs.PickFolder, Title = "Choose a folder", MaxWidth = "640px")]
+
+@*
+  Dialog "Module.Storage/pick-folder" (see StorageDialogs.PickFolder): browse folders and choose the open one.
+    parameters  { folderId?: id, rights?: "create" | "read" }
+    result      { id, name, path: [{ id, name }], publicFolder: bool }
+*@
+
+<div class="mud-dialog-content">
+  <StorageBrowser @ref="_browser" Start="_start" FilesShown="false" OnFolder="FolderChanged" />
+  @if (_folder is not null && Refused() is { } why)
+  {
+    <p class="st-pick-hint">@why</p>
+  }
+</div>
+<div class="mud-dialog-actions">
+  <button type="button" class="mud-button-root mud-button-text mud-button-medium" @onclick="Dialog.Cancel">@L["Cancel"]</button>
+  <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" disabled="@(_folder is null || Refused() is not null)" @onclick="Done">@L["Choose this folder"]</button>
+</div>
+
+@code {
+  [CascadingParameter] public IDialogReference Dialog { get; set; } = default!;
+  [Inject] private IStringLocalizerFactory Texts { get; set; } = default!;
+
+  /// <summary>The caller's parameters (web JSON).</summary>
+  private sealed record Parameters(string? FolderId, string? Rights);
+
+  // StorageRights values (NTFS): ListFolder / ReadData, CreateFiles / WriteData.
+  private const int ListFolder = 0x1;
+  private const int CreateFiles = 0x2;
+
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(StorageBrowser));
+
+  private StorageBrowser? _browser;
+  private Guid? _start;
+  private int _needed = CreateFiles;
+  private FolderView? _folder;
+
+  protected override void OnInitialized()
+  {
+    var parameters = Dialog.GetParameters<Parameters>();
+    _start = Guid.TryParse(parameters?.FolderId, out var start) ? start : null;
+    _needed = string.Equals(parameters?.Rights, "read", StringComparison.OrdinalIgnoreCase) ? ListFolder : CreateFiles;
+  }
+
+  private void FolderChanged(FolderView? folder) => _folder = folder;
+
+  private string? Refused() => _folder is null
+    ? null
+    : (_folder.Folder.Rights & _needed) == _needed
+      ? null
+      : _needed == CreateFiles ? L["You cannot add files to this folder."].Value : L["You cannot open this folder."].Value;
+
+  private void Done()
+  {
+    if (_folder is null || Refused() is not null || _browser is null) return;
+    Dialog.Close(new
+    {
+      id = _folder.Folder.Id.ToString(),
+      name = _browser.NameOf(_folder.Folder),
+      path = _folder.Path.Select(c => new { id = c.Id.ToString(), name = _browser.CrumbName(c) }).ToArray(),
+      publicFolder = _folder.PublicFolderId is not null,
+    });
+  }
+}
