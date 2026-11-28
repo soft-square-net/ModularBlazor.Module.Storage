@@ -76,6 +76,8 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 view = "details",
                 preview = true,
                 renameInPlace = true,
+                // The address bar is editable only when .NET answers "resolvePath" (typing a path, Enter).
+                resolvePath = true,
                 // Shown where the deny lists allow them (MudTail hides an entry that an item's or the folder's list names).
                 menuItems = new object[]
                 {
@@ -133,6 +135,7 @@ public partial class Files : ComponentBase, IAsyncDisposable
                 "places" => Places(),
                 "list" => await ListAsync(request),
                 "children" => await ChildrenAsync(request),
+                "resolvePath" => await ResolvePathAsync(Text(request, "text") ?? ""),
                 "rename" => await RenameAsync(request),
                 "preview" => await PreviewAsync(request),
                 "command" => await CommandAsync(request),
@@ -234,6 +237,61 @@ public partial class Files : ComponentBase, IAsyncDisposable
         var view = await Api.ListFolderAsync(id.Value);
         return view.Items.Where(i => i.Kind == ItemKind.Folder)
             .Select(i => new { id = i.Id.ToString(), name = i.Name, hasChildren = i.HasSubfolders });
+    }
+
+    /// <summary>
+    /// A path typed in the address bar ("Files\Reports\2026", "Users\My files\Photos", "My files/Photos", a folder id): the folder's id, or
+    /// null (the explorer stays where it is) after a toast saying the path was not found. The first name is a top
+    /// place as the tree shows it (also its English name); each next one a folder inside, matched without case.
+    /// </summary>
+    private async Task<string?> ResolvePathAsync(string text)
+    {
+        var parts = text.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        try
+        {
+            var id = await WalkAsync(parts);
+            if (id is not null) return id;
+        }
+        catch (AccessTokenNotAvailableException) { throw; }
+        catch (Exception) { } // a folder on the way that cannot be listed: not found, as Windows says
+        await MudTail.ToastAsync(L["Cannot find \"{0}\". Check the spelling and try again.", text.Trim()].Value, "error");
+        return null;
+    }
+
+    private async Task<string?> WalkAsync(string[] parts)
+    {
+        if (parts.Length == 0 || _roots is null) return null;
+        bool Is(string name, string english) =>
+            string.Equals(name, L[english].Value, StringComparison.CurrentCultureIgnoreCase)
+            || string.Equals(name, english, StringComparison.OrdinalIgnoreCase);
+
+        var first = parts[0];
+        if (parts.Length == 1 && Is(first, "Shared with me")) return SharedId;
+        if (parts.Length == 1 && Is(first, "Recycle bin")) return BinId;
+
+        Guid folder;
+        if (Is(first, "Files")) folder = _roots.Files.Id;
+        else if (Is(first, "My files")) folder = _roots.Home.Id;
+        else if (Is(first, "Users"))
+        {
+            // The homes' top folder (a path the address bar shows for a home: Users\My files\...): above the home.
+            var home = await Api.ListFolderAsync(_roots.Home.Id);
+            if (home.Path.FirstOrDefault(c => c.Role == FolderRole.Homes) is not { } users) return null;
+            folder = users.Id;
+        }
+        else if (Guid.TryParse(first, out var id)) folder = id;
+        else return null;
+
+        var view = await Api.ListFolderAsync(folder); // also checks that a typed id is a folder the user can open
+        foreach (var name in parts.Skip(1))
+        {
+            var next = view.Items.FirstOrDefault(i => i.Kind == ItemKind.Folder
+                && (string.Equals(DisplayName(i.Id, i.Role, i.Name), name, StringComparison.CurrentCultureIgnoreCase)
+                    || string.Equals(i.Name, name, StringComparison.CurrentCultureIgnoreCase)));
+            if (next is null) return null;
+            view = await Api.ListFolderAsync(next.Id);
+        }
+        return view.Folder.Id.ToString();
     }
 
     /// <summary>In-place rename: true, or the reason the explorer shows under the name.</summary>

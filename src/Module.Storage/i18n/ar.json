@@ -195,5 +195,6 @@
   "Not saved": "غير محفوظ",
   "Keeps the name: the edited image becomes the file's new version (the old one stays in Previous versions).": "يحتفظ بالاسم: تصبح الصورة المحررة إصدارًا جديدًا من الملف (ويبقى القديم في الإصدارات السابقة).",
   "Save": "حفظ",
-  "Save as a copy": "حفظ كنسخة"
+  "Save as a copy": "حفظ كنسخة",
+  "Cannot find \"{0}\". Check the spelling and try again.": "تعذر العثور على \"{0}\". تحقق من الإملاء وحاول مرة أخرى."
 }
